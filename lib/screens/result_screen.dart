@@ -11,121 +11,193 @@ class ResultScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       body: Stack(
         children: [
           Positioned.fill(child: CustomPaint(painter: NotebookPainter())),
           SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back, color: AppColors.navyBlue),
-                        onPressed: () => Navigator.pop(context),
+                      Transform.rotate(
+                        angle: -0.05,
+                        child: IconButton(
+                          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.navyBlue),
+                          onPressed: () => Navigator.pop(context),
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            elevation: 4,
+                            shadowColor: AppColors.navyBlue.withOpacity(0.2),
+                          ),
+                        ),
                       ),
-                      Text(
-                        'Board Analysis',
-                        style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 28),
+                      const SizedBox(width: 16),
+                      Transform.rotate(
+                        angle: 0.02,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.navyBlue, width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.navyBlue.withOpacity(0.2),
+                                offset: const Offset(4, 4),
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            'ANALYSIS',
+                            style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                              fontSize: 24,
+                              fontFamily: 'DynaPuff',
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 40),
                   
-                  // Reconstructed Board
+                  // Reconstructed Board (Funky Container)
                   Center(
+                    child: Transform.rotate(
+                      angle: -0.01,
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppColors.navyBlue, width: 3),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.navyBlue.withOpacity(0.2),
+                              offset: const Offset(8, 8),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: SizedBox(
+                            width: MediaQuery.of(context).size.width * 0.75,
+                            height: MediaQuery.of(context).size.width * 0.75,
+                            child: GridView.builder(
+                              padding: EdgeInsets.zero,
+                              physics: const NeverScrollableScrollPhysics(),
+                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: boardData.size,
+                              ),
+                              itemCount: boardData.size * boardData.size,
+                              itemBuilder: (context, index) {
+                                int r = index ~/ boardData.size;
+                                int c = index % boardData.size;
+                                return Container(
+                                  decoration: BoxDecoration(
+                                    color: boardData.grid[r][c],
+                                    border: Border.all(color: Colors.black.withOpacity(0.05), width: 0.5),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 50),
+                  
+                  // Output Section
+                  Transform.rotate(
+                    angle: 0.01,
                     child: Container(
-                      padding: const EdgeInsets.all(4),
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: AppColors.navyBlue,
-                        borderRadius: BorderRadius.circular(8),
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.navyBlue, width: 2),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 10,
-                            offset: const Offset(0, 5),
+                            color: AppColors.navyBlue.withOpacity(0.15),
+                            offset: const Offset(6, 6),
                           ),
                         ],
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: SizedBox(
-                          width: MediaQuery.of(context).size.width * 0.85,
-                          height: MediaQuery.of(context).size.width * 0.85,
-                          child: GridView.builder(
-                            padding: EdgeInsets.zero,
-                            physics: const NeverScrollableScrollPhysics(),
-                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: boardData.size,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Regions Mapping',
+                            style: TextStyle(
+                              fontFamily: 'DynaPuff',
+                              fontSize: 18,
+                              color: AppColors.navyBlue,
+                              fontWeight: FontWeight.bold,
                             ),
-                            itemCount: boardData.size * boardData.size,
-                            itemBuilder: (context, index) {
-                              int r = index ~/ boardData.size;
-                              int c = index % boardData.size;
-                              return Container(
-                                decoration: BoxDecoration(
-                                  color: boardData.grid[r][c],
-                                  border: Border.all(color: Colors.black.withOpacity(0.1), width: 0.5),
-                                ),
-                              );
-                            },
+                          ),
+                          const SizedBox(height: 16),
+                          SelectableText(
+                            _formatOutput(),
+                            style: const TextStyle(
+                              fontFamily: 'Comfortaa',
+                              fontSize: 14,
+                              color: AppColors.darkText,
+                              fontWeight: FontWeight.bold,
+                              height: 1.8,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 60),
+                  
+                  // Funky Action Button
+                  Transform.rotate(
+                    angle: -0.02,
+                    child: Container(
+                      width: double.infinity,
+                      height: 65,
+                      decoration: BoxDecoration(
+                        color: AppColors.gold,
+                        borderRadius: BorderRadius.circular(15),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.navyBlue.withOpacity(0.2),
+                            offset: const Offset(5, 5),
+                          ),
+                        ],
+                        border: Border.all(color: AppColors.navyBlue, width: 2.5),
+                      ),
+                      child: ElevatedButton.icon(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.refresh_rounded, size: 28),
+                        label: const Text(
+                          'Scan Another',
+                          style: TextStyle(
+                            fontFamily: 'DynaPuff',
+                            fontWeight: FontWeight.bold,
+                            fontSize: 20,
                           ),
                         ),
-                      ),
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 40),
-                  
-                  // Output Section
-                  Text(
-                    'Regions Mapping',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.paperLine, width: 2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.02),
-                          blurRadius: 10,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          foregroundColor: AppColors.navyBlue,
+                          shadowColor: Colors.transparent,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                         ),
-                      ],
-                    ),
-                    child: SelectableText(
-                      _formatOutput(),
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 14,
-                        color: AppColors.darkText,
-                        height: 1.5,
                       ),
                     ),
                   ),
-                  
                   const SizedBox(height: 40),
-                  
-                  // Reset Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 55,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.navyBlue,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: const Text('Back to Scanner', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -139,7 +211,7 @@ class ResultScreen extends StatelessWidget {
     StringBuffer buffer = StringBuffer();
     boardData.regions.forEach((id, region) {
       buffer.write('Q$id = [');
-      buffer.write(region.coordinates.join(','));
+      buffer.write(region.coordinates.join(', '));
       buffer.write(']\n');
     });
     return buffer.toString();

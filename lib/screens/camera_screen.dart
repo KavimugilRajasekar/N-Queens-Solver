@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import '../constants/colors.dart';
@@ -17,182 +16,162 @@ class CameraScreen extends StatefulWidget {
 class _CameraScreenState extends State<CameraScreen> {
   late CameraController _controller;
   late Future<void> _initializeControllerFuture;
-  Timer? _analysisTimer;
-  BoardData? _realtimeBoard;
-  bool _isAnalyzing = false;
+  bool _isProcessing = false;
 
   @override
   void initState() {
     super.initState();
     _controller = CameraController(
       widget.camera,
-      ResolutionPreset.medium, // Medium is faster for real-time
+      ResolutionPreset.high,
       enableAudio: false,
     );
-    _initializeControllerFuture = _controller.initialize().then((_) {
-      _startRealtimeAnalysis();
-    });
-  }
-
-  void _startRealtimeAnalysis() {
-    _analysisTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) async {
-      if (_isAnalyzing || !mounted) return;
-      
-      try {
-        _isAnalyzing = true;
-        final image = await _controller.takePicture();
-        final boardData = await BoardProcessor.processImage(image.path, 8);
-        
-        if (mounted) {
-          setState(() {
-            _realtimeBoard = boardData;
-          });
-        }
-      } catch (e) {
-        debugPrint('Real-time analysis error: $e');
-      } finally {
-        _isAnalyzing = false;
-      }
-    });
+    _initializeControllerFuture = _controller.initialize();
   }
 
   @override
   void dispose() {
-    _analysisTimer?.cancel();
     _controller.dispose();
     super.dispose();
+  }
+
+  Future<void> _captureAndProcess() async {
+    if (_isProcessing) return;
+
+    setState(() {
+      _isProcessing = true;
+    });
+
+    try {
+      final image = await _controller.takePicture();
+      final boardData = await BoardProcessor.processImage(image.path, 8);
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ResultScreen(boardData: boardData),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppColors.navyBlue,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text(
-          'Real-time Scanner',
-          style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.navyBlue),
-        ),
-        backgroundColor: Colors.white,
-        iconTheme: const IconThemeData(color: AppColors.navyBlue),
-        elevation: 0,
-      ),
+      backgroundColor: Colors.black,
       body: FutureBuilder<void>(
         future: _initializeControllerFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.done) {
             return Stack(
               children: [
-                CameraPreview(_controller),
-                
-                // Scanning Overlay with Live Grid
-                Center(
-                  child: Container(
-                    width: 320,
-                    height: 320,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: AppColors.navyBlue.withOpacity(0.5), width: 2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Stack(
-                      children: [
-                        if (_realtimeBoard != null)
-                          Opacity(
-                            opacity: 0.4,
-                            child: GridView.builder(
-                              padding: EdgeInsets.zero,
-                              physics: const NeverScrollableScrollPhysics(),
-                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 8,
-                              ),
-                              itemCount: 64,
-                              itemBuilder: (context, index) {
-                                int r = index ~/ 8;
-                                int c = index % 8;
-                                return Container(
-                                  decoration: BoxDecoration(
-                                    color: _realtimeBoard!.grid[r][c],
-                                    border: Border.all(color: Colors.white24, width: 0.5),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        _buildCorner(top: 0, left: 0),
-                        _buildCorner(top: 0, right: 0, angle: 90),
-                        _buildCorner(bottom: 0, left: 0, angle: -90),
-                        _buildCorner(bottom: 0, right: 0, angle: 180),
-                      ],
-                    ),
-                  ),
-                ),
+                Positioned.fill(child: CameraPreview(_controller)),
 
-                Positioned(
-                  bottom: 40,
-                  left: 0,
-                  right: 0,
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.8),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          _realtimeBoard == null ? 'Analyzing Board...' : 'Board Locked!',
-                          style: const TextStyle(color: AppColors.navyBlue, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      GestureDetector(
-                        onTap: _realtimeBoard == null ? null : () => _confirmResult(),
-                        child: Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: _realtimeBoard == null ? Colors.grey : AppColors.navyBlue, 
-                              width: 4
-                            ),
-                          ),
-                          child: Center(
-                            child: Container(
-                              width: 60,
-                              height: 60,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: _realtimeBoard == null ? Colors.grey : AppColors.navyBlue,
-                              ),
-                              child: const Icon(Icons.check, color: Colors.white, size: 35),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                _buildViewfinderOverlay(),
+
+                _buildFunkyTopUI(),
+
+                _buildFunkyBottomUI(),
               ],
             );
           } else {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator(color: AppColors.navyBlue));
           }
         },
       ),
     );
   }
 
-  void _confirmResult() {
-    if (_realtimeBoard == null) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ResultScreen(boardData: _realtimeBoard!),
+  Widget _buildFunkyTopUI() {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Transform.rotate(
+          angle: -0.1,
+          child: IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.close_rounded, color: AppColors.navyBlue, size: 30),
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.white,
+              padding: const EdgeInsets.all(12),
+              elevation: 8,
+              shadowColor: AppColors.navyBlue.withOpacity(0.4),
+            ),
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildCorner({double? top, double? bottom, double? left, double? right, double angle = 0}) {
+  Widget _buildFunkyBottomUI() {
+    return Positioned(
+      bottom: 60,
+      left: 0,
+      right: 0,
+      child: Column(
+        children: [
+          _isProcessing
+              ? const CircularProgressIndicator(color: AppColors.gold)
+              : _buildFunkyCaptureButton(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildViewfinderOverlay() {
+    return Stack(
+      children: [
+        ColorFiltered(
+          colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.3), BlendMode.srcOut),
+          child: Stack(
+            children: [
+              Container(decoration: const BoxDecoration(color: Colors.black, backgroundBlendMode: BlendMode.dstOut)),
+              Center(
+                child: Container(
+                  width: 280,
+                  height: 280,
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(40)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Center(
+          child: SizedBox(
+            width: 280,
+            height: 280,
+            child: Stack(
+              children: [
+                _buildFunkyCorner(top: 0, left: 0),
+                _buildFunkyCorner(top: 0, right: 0, angle: 90),
+                _buildFunkyCorner(bottom: 0, left: 0, angle: -90),
+                _buildFunkyCorner(bottom: 0, right: 0, angle: 180),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFunkyCorner({double? top, double? bottom, double? left, double? right, double angle = 0}) {
     return Positioned(
       top: top,
       bottom: bottom,
@@ -201,12 +180,48 @@ class _CameraScreenState extends State<CameraScreen> {
       child: Transform.rotate(
         angle: angle * 3.14159 / 180,
         child: Container(
-          width: 30,
-          height: 30,
+          width: 60,
+          height: 60,
           decoration: const BoxDecoration(
             border: Border(
-              top: BorderSide(color: AppColors.gold, width: 5),
-              left: BorderSide(color: AppColors.gold, width: 5),
+              top: BorderSide(color: AppColors.gold, width: 12),
+              left: BorderSide(color: AppColors.gold, width: 12),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFunkyCaptureButton() {
+    return GestureDetector(
+      onTap: _captureAndProcess,
+      child: Transform.rotate(
+        angle: -0.05,
+        child: Container(
+          width: 110,
+          height: 110,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.navyBlue.withOpacity(0.3),
+                offset: const Offset(10, 10),
+                blurRadius: 0,
+              ),
+            ],
+            border: Border.all(color: AppColors.navyBlue, width: 4),
+          ),
+          child: Center(
+            child: Container(
+              width: 85,
+              height: 85,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.gold,
+              ),
+              child: const Icon(Icons.camera_alt_rounded, color: AppColors.navyBlue, size: 45),
             ),
           ),
         ),
