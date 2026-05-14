@@ -1,0 +1,95 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Android-specific
+/android/local.properties
+/android/key.properties
+/android/app/src/main/res/raw/google_services.json
+/android/app/google-services.json
+/android/app/src/main/assets/google-services.json
+*.keystore
+!/android/app/key.properties
+
+# iOS-specific
+/ios/Flutter/Generated.xcconfig
+/ios/Flutter/flutter_export_environment.sh
+/ios/Flutter/Flutter.framework
+/ios/Flutter/Flutter.podspec
+/ios/Flutter/App.framework
+/ios/Flutter/App.podspec
+/ios/App.framework
+/ios/App.podspec
+/ios/Pods/
+/ios/.xcworkspace
+/ios/.xcodeproj
+/ios/Flutter/ephemeral/
+/ios/ServiceDefinitions.json
+/ios/Runner/GoogleService-Info.plist
+
+# Windows-specific
+/windows/flutter/ephemeral/
+/windows/CMakeCache.txt
+/windows/CMakeFiles/
+/windows/cmake_install.cmake
+/windows/x64/
+/windows/build/
+
+# macOS-specific
+/macos/Flutter/ephemeral/
+/macos/Flutter/Generated.xcconfig
+/macos/Flutter/flutter_export_environment.sh
+/macos/ServiceDefinitions.json
+/macos/Runner/GoogleService-Info.plist
+/macos/Pods/
+
+# Linux-specific
+/linux/flutter/ephemeral/
+
+# Web-specific
+/web/
+
+# Coverage
+/coverage/
+
