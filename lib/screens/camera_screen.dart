@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import '../constants/colors.dart';
 import '../utils/board_processor.dart';
-import 'result_screen.dart';
+import 'n_queens_board.dart';
 
 class CameraScreen extends StatefulWidget {
   final CameraDescription camera;
@@ -50,7 +50,7 @@ class _CameraScreenState extends State<CameraScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => ResultScreen(boardData: boardData),
+            builder: (context) => NQueensBoardScreen(boardData: boardData),
           ),
         );
       }

@@ -26,13 +26,13 @@ class Point {
 
 class BoardData {
   final int size;
-  final List<List<Color>> grid;
+  final List<List<int>> regionIds; // 1-based region IDs
   final Map<int, BoardRegion> regions;
   final String rawResponse;
 
   BoardData({
     required this.size,
-    required this.grid,
+    required this.regionIds,
     required this.regions,
     required this.rawResponse,
   });
@@ -41,20 +41,24 @@ class BoardData {
 class BoardProcessor {
   static const String _apiUrl = 'https://image-processor-livid.vercel.app/process-image';
 
-  static final List<Color> _regionPalette = [
-    Colors.blue.shade100,
-    Colors.green.shade100,
-    Colors.orange.shade100,
-    Colors.purple.shade100,
-    Colors.pink.shade100,
-    Colors.teal.shade100,
-    Colors.amber.shade100,
-    Colors.cyan.shade100,
-    Colors.indigo.shade100,
-    Colors.lime.shade100,
-    Colors.brown.shade100,
-    Colors.deepOrange.shade100,
+  static const List<Color> regionPalette = [
+    Color(0xFFFFB3B3), // Red 200
+    Color(0xFFB3D9FF), // Blue 200
+    Color(0xFFB3FFB3), // Green 200
+    Color(0xFFFFD9B3), // Orange 200
+    Color(0xFFE6B3FF), // Purple 200
+    Color(0xFFB3FFFF), // Cyan 200
+    Color(0xFFFFB3E6), // Pink 200
+    Color(0xFFB3B3FF), // Indigo 200
+    Color(0xFFFFE6B3), // Amber 200
+    Color(0xFFB3FFE6), // Teal 200
+    Color(0xFFE6FFB3), // Lime 200
+    Color(0xFFD9B38C), // Brown 200
   ];
+
+  static Color getRegionColor(int id) {
+    return regionPalette[(id - 1) % regionPalette.length];
+  }
 
   static Future<BoardData> processImage(String imagePath, int size) async {
     try {
@@ -117,32 +121,42 @@ class BoardProcessor {
       
       // Since server is 1-based, the maximum coordinate value IS the board size N
       int detectedN = maxVal > 0 ? maxVal : size; 
+      if (detectedN > 12) detectedN = 12; // CAP at 12x12
       debugPrint('Detected Board Size (N): $detectedN');
 
       // 4. Construct BoardData (Map 1-based to 0-based)
-      final grid = List.generate(detectedN, (_) => List.filled(detectedN, Colors.white));
+      final regionIds = List.generate(detectedN, (_) => List.filled(detectedN, 0));
       final regions = <int, BoardRegion>{};
 
-      regionMap.forEach((id, coords) {
-        Color color = _regionPalette[(id - 1) % _regionPalette.length];
+      // Normalize IDs to be 1..N to avoid gaps and ensure Region 1 always gets Color 1
+      int normalizedId = 1;
+      final Map<int, int> idMapping = {};
+      
+      // SORT the keys so that original Q1 maps to normalized 1, Q2 to 2, etc.
+      final sortedKeys = regionMap.keys.toList()..sort();
+
+      for (var originalId in sortedKeys) {
+        final coords = regionMap[originalId]!;
+        int id = normalizedId++; // We assign sequential IDs starting from 1
+        
+        Color color = getRegionColor(id);
         regions[id] = BoardRegion(id: id, color: color, coordinates: coords);
 
         for (var pt in coords) {
-          // Explicitly map 1-based server index to 0-based Flutter index
           int row = pt.x - 1;
           int col = pt.y - 1;
 
           if (row >= 0 && row < detectedN && col >= 0 && col < detectedN) {
-            grid[row][col] = color;
+            regionIds[row][col] = id;
           }
         }
-      });
+      }
 
       return BoardData(
         size: detectedN,
-        grid: grid,
+        regionIds: regionIds,
         regions: regions,
-        rawResponse: responseBody,
+        rawResponse: response.body,
       );
     } catch (e) {
       debugPrint('Fatal Error: $e');
