@@ -106,29 +106,20 @@ class BoardProcessor {
         throw Exception('No region data extracted.\nResponse: $responseBody');
       }
 
-      // Determine dynamic board size N based on the number of regions (Qi)
-      // or the highest region ID found
-      int detectedN = 0;
-      regionMap.keys.forEach((id) {
-        if (id > detectedN) detectedN = id;
-      });
-      
-      if (detectedN == 0) detectedN = size; // Fallback to provided size
-      debugPrint('Dynamic Board Size Detected: $detectedN x $detectedN');
-
-      // Detect if 0-based or 1-based
-      bool hasZero = false;
+      // Determine dynamic board size N based on coordinates (assuming 1-based from server)
+      int maxVal = 0;
       for (var coords in regionMap.values) {
         for (var pt in coords) {
-          if (pt.x == 0 || pt.y == 0) {
-            hasZero = true;
-            break;
-          }
+          if (pt.x > maxVal) maxVal = pt.x;
+          if (pt.y > maxVal) maxVal = pt.y;
         }
-        if (hasZero) break;
       }
+      
+      // Since server is 1-based, the maximum coordinate value IS the board size N
+      int detectedN = maxVal > 0 ? maxVal : size; 
+      debugPrint('Detected Board Size (N): $detectedN');
 
-      // 4. Construct BoardData using the dynamic size
+      // 4. Construct BoardData (Map 1-based to 0-based)
       final grid = List.generate(detectedN, (_) => List.filled(detectedN, Colors.white));
       final regions = <int, BoardRegion>{};
 
@@ -137,8 +128,9 @@ class BoardProcessor {
         regions[id] = BoardRegion(id: id, color: color, coordinates: coords);
 
         for (var pt in coords) {
-          int row = hasZero ? pt.x : pt.x - 1;
-          int col = hasZero ? pt.y : pt.y - 1;
+          // Explicitly map 1-based server index to 0-based Flutter index
+          int row = pt.x - 1;
+          int col = pt.y - 1;
 
           if (row >= 0 && row < detectedN && col >= 0 && col < detectedN) {
             grid[row][col] = color;
