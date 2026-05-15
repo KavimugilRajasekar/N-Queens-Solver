@@ -171,51 +171,63 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
         border: Border.all(color: AppColors.navyBlue.withOpacity(0.2), width: 1.5),
         boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.05), offset: const Offset(4, 4))],
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
-        leading: Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            color: AppColors.background, 
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.navyBlue.withOpacity(0.1)),
+      child: Stack(
+        children: [
+          ListTile(
+            contentPadding: const EdgeInsets.all(16),
+            leading: Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                color: AppColors.background, 
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.navyBlue.withOpacity(0.1)),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: GridView.builder(
+                  padding: EdgeInsets.zero,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: board.size),
+                  itemCount: board.size * board.size,
+                  itemBuilder: (context, i) {
+                    int r = i ~/ board.size;
+                    int c = i % board.size;
+                    int id = board.regionIds[r][c];
+                    return Container(color: id == 0 ? Colors.white : BoardProcessor.getRegionColor(id));
+                  },
+                ),
+              ),
+            ),
+            title: Text(data['name'], style: const TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 18)),
+            subtitle: Text('${board.size}x${board.size} • ${data['date'].year}-${data['date'].month.toString().padLeft(2, '0')}-${data['date'].day.toString().padLeft(2, '0')}', style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 12)),
+            onTap: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (context) => NQueensBoardScreen(boardData: board, isAlreadySaved: true, boardId: data['id'])));
+              _refreshBoards();
+            },
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: GridView.builder(
-              padding: EdgeInsets.zero,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: board.size),
-              itemCount: board.size * board.size,
-              itemBuilder: (context, i) {
-                int r = i ~/ board.size;
-                int c = i % board.size;
-                int id = board.regionIds[r][c];
-                return Container(color: id == 0 ? Colors.white : BoardProcessor.getRegionColor(id));
-              },
+          // Action Buttons at Bottom Right
+          Positioned(
+            bottom: 4,
+            right: 4,
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, color: AppColors.navyBlue, size: 18),
+                  onPressed: () => _showRenameDialog(data['id'], data['name']),
+                  constraints: const BoxConstraints(),
+                  padding: const EdgeInsets.all(8),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                  onPressed: () => _confirmDelete(data['id']),
+                  constraints: const BoxConstraints(),
+                  padding: const EdgeInsets.all(8),
+                ),
+              ],
             ),
           ),
-        ),
-        title: Text(data['name'], style: const TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 18)),
-        subtitle: Text('${board.size}x${board.size} • ${data['date'].toString().split('T')[0]}', style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 12)),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.edit_outlined, color: AppColors.navyBlue, size: 20),
-              onPressed: () => _showRenameDialog(data['id'], data['name']),
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
-              onPressed: () => _confirmDelete(data['id']),
-            ),
-          ],
-        ),
-        onTap: () async {
-          await Navigator.push(context, MaterialPageRoute(builder: (context) => NQueensBoardScreen(boardData: board, isAlreadySaved: true, boardId: data['id'])));
-          _refreshBoards();
-        },
+        ],
       ),
     );
   }
