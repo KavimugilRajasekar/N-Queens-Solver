@@ -59,7 +59,7 @@ This app focuses on a specific, popular variant of the N-Queens problem:
 ### Installation
 1. Clone the repository:
    ```bash
-   git clone https://github.com/YourUsername/n_queens_solver.git
+   git clone https://github.com/KavimugilRajasekar/n_queens_solver.git
    ```
 2. Install dependencies:
    ```bash
