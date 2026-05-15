@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/error_dialog.dart';
 import 'package:camera/camera.dart';
 import '../constants/colors.dart';
 import '../utils/board_processor.dart';
@@ -56,11 +57,9 @@ class _CameraScreenState extends State<CameraScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppColors.navyBlue,
-          ),
+        FunkyErrorDialog.show(context,
+          title: 'Scan Failed!',
+          message: 'Could not process the board image. Try again with better lighting and alignment.',
         );
       }
     } finally {

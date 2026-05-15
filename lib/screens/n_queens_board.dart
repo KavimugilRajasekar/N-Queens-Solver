@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/error_dialog.dart';
 import '../constants/colors.dart';
 import '../utils/board_processor.dart';
 import '../constants/region_colors.dart';
@@ -70,11 +71,9 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
     }
 
     if (hasInvalidRegions) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Board has invalid regions! Please edit highlighted cells before solving.'),
-          backgroundColor: Colors.redAccent,
-        ),
+      FunkyErrorDialog.show(context,
+        title: 'Oops!',
+        message: 'Some regions are invalid! Fix the Funky-X marks using Edit before solving.',
       );
       return;
     }
@@ -132,7 +131,10 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
     if (_tempGrid != null) {
       bool allFilled = _tempGrid!.every((row) => row.every((id) => id != 0));
       if (!allFilled) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please assign a region to all cells!')));
+        FunkyErrorDialog.show(context,
+          title: 'Hold on!',
+          message: 'Every cell needs a region color! Paint all the empty cells before saving.',
+        );
         return;
       }
 
@@ -163,7 +165,10 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
 
       for (var entry in newRegions.entries) {
         if (!_isRegionContiguous(entry.value)) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Region ${entry.key} is disconnected!'), backgroundColor: Colors.redAccent));
+          FunkyErrorDialog.show(context,
+            title: 'Disconnected!',
+            message: 'Region ${entry.key} is split apart! Each region must be one connected group.',
+          );
           return;
         }
       }
@@ -550,7 +555,7 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
                     await StorageManager.saveBoard(widget.boardData);
                     if (mounted) {
                       setState(() => _isSaved = true);
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Board saved to library!')));
+                      // ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Board saved to library!')));
                     }
                   },
                   icon: const Icon(Icons.bookmark_add_rounded, size: 24, color: AppColors.navyBlue),

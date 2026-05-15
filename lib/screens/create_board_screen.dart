@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/error_dialog.dart';
 import 'package:camera/camera.dart';
 import '../constants/colors.dart';
 import '../utils/board_processor.dart';
@@ -41,7 +42,10 @@ class _CreateBoardScreenState extends State<CreateBoardScreen> {
     // 1. Validate: Every cell must have a region
     bool allFilled = _grid!.every((row) => row.every((id) => id != 0));
     if (!allFilled) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please assign a region to all cells!')));
+      FunkyErrorDialog.show(context,
+        title: 'Hold on!',
+        message: 'Every cell needs a region color! Paint all the empty cells before saving.',
+      );
       return;
     }
 
@@ -58,11 +62,9 @@ class _CreateBoardScreenState extends State<CreateBoardScreen> {
     // 2. Validate: Every region must be contiguous (connected)
     for (var entry in regions.entries) {
       if (!_isRegionContiguous(entry.value)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Region ${entry.key} is disconnected! Every region must be a single contiguous shape.'),
-            backgroundColor: Colors.redAccent,
-          )
+        FunkyErrorDialog.show(context,
+          title: 'Disconnected!',
+          message: 'Region ${entry.key} is split apart! Each region must be one connected group.',
         );
         return;
       }
