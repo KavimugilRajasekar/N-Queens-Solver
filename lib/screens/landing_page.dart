@@ -19,60 +19,63 @@ class LandingPage extends StatelessWidget {
           Positioned.fill(child: CustomPaint(painter: NotebookPainter())),
           SafeArea(
             child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
+              physics: const BouncingScrollPhysics(),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 60.0),
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 40.0),
                 child: Column(
                   children: [
-                    _buildLogo(context),
+                    _buildHeroSection(context),
                     const SizedBox(height: 60),
-                    _buildSectionHeader(context, "The Puzzle", "An Ancient Challenge"),
-                    _buildMinimalCard(
+                    _buildFunkyHeader(context, "The Puzzle", "Ancient logic"),
+                    _buildStickerCard(
                       context,
                       title: 'The N-Queens Problem',
-                      content: 'The classic goal is to place N queens on an N×N board so no two queens threaten each other. This app solves a specialized variant often found in modern logic puzzles.',
-                      icon: Icons.grid_view_rounded,
+                      content: 'Place N queens on an N×N board so no two queens threaten each other. This is a special regional variant!',
+                      icon: Icons.auto_awesome_mosaic_rounded,
+                      rotation: -0.01,
+                      color: const Color(0xFFFFF9C4), // Lemon
                     ),
-                    const SizedBox(height: 32),
-                    _buildSectionHeader(context, "The Rules", "Universal Constraints"),
-                    _buildMinimalCard(
+                    const SizedBox(height: 40),
+                    _buildFunkyHeader(context, "The Rules", "How to play"),
+                    _buildStickerCard(
                       context,
                       title: 'Row & Column Logic',
-                      content: 'Exactly one queen must exist in every horizontal row and every vertical column. No overlaps allowed!',
+                      content: 'Exactly one queen in every row and column. No overlaps allowed!',
                       icon: Icons.straighten_rounded,
+                      rotation: 0.015,
+                      color: const Color(0xFFE1F5FE), // Light Blue
                     ),
-                    const SizedBox(height: 16),
-                    _buildMinimalCard(
+                    const SizedBox(height: 20),
+                    _buildStickerCard(
                       context,
-                      title: 'The Region (\$Q_i\$) Rule',
-                      content: 'The board is divided into distinct colored regions. Each region must contain exactly one queen, regardless of its shape or size.',
+                      title: 'The Region Rule',
+                      content: 'The board has distinct colored regions. Each region must have exactly one queen.',
                       icon: Icons.category_outlined,
+                      rotation: -0.01,
+                      color: const Color(0xFFF1F8E9), // Light Green
                     ),
-                    const SizedBox(height: 16),
-                    _buildMinimalCard(
+                    const SizedBox(height: 20),
+                    _buildStickerCard(
                       context,
-                      title: 'The 8-Neighbor Rule',
-                      content: 'Queens are "anti-social." No queen can touch another queen in any of its 8 surrounding cells (Up, Down, Left, Right, and all Diagonals).',
+                      title: '8-Neighbor Rule',
+                      content: 'Queens are anti-social. They cannot touch each other in any surrounding cell.',
                       icon: Icons.do_not_disturb_on_outlined,
+                      rotation: 0.02,
+                      color: const Color(0xFFFCE4EC), // Light Pink
                     ),
-                    const SizedBox(height: 32),
-                    _buildSectionHeader(context, "The AI Solver", "How it Thinks"),
-                    _buildMinimalCard(
+                    const SizedBox(height: 60),
+                    _buildFunkyHeader(context, "The Brains", "AI Engine"),
+                    _buildStickerCard(
                       context,
                       title: 'Backtracking AI',
-                      content: 'The solver uses a depth-first search. If it hits a dead end where no more queens can be placed, it "backtracks" to the previous step and tries a different path.',
+                      content: 'If it hits a dead end, it "backtracks" and tries a different path automatically.',
                       icon: Icons.psychology_outlined,
-                    ),
-                    const SizedBox(height: 16),
-                    _buildMinimalCard(
-                      context,
-                      title: 'Forward Checking',
-                      content: 'To find solutions faster, the AI uses "Confinement Logic." Every time a queen is placed, it immediately eliminates impossible cells from other regions to narrow the search space.',
-                      icon: Icons.visibility_outlined,
+                      rotation: -0.015,
+                      color: const Color(0xFFFFF3E0), // Light Orange
                     ),
                     const SizedBox(height: 80),
-                    _buildActionButton(context),
-                    const SizedBox(height: 40),
+                    _buildMainActionButton(context),
+                    const SizedBox(height: 60),
                   ],
                 ),
               ),
@@ -83,101 +86,129 @@ class LandingPage extends StatelessWidget {
     );
   }
 
-  Widget _buildLogo(BuildContext context) {
+  Widget _buildHeroSection(BuildContext context) {
     return Column(
       children: [
-        Container(
-          width: 120,
-          height: 120,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white,
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, spreadRadius: 2)],
-          ),
-          child: ClipOval(
-            child: Image.asset(
-              'assets/icons/n_queen_logo.png',
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => const Icon(Icons.grid_4x4_rounded, color: AppColors.navyBlue, size: 50),
+        Transform.rotate(
+          angle: -0.05,
+          child: Container(
+            padding: const EdgeInsets.all(15),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(25),
+              border: Border.all(color: AppColors.navyBlue, width: 3),
+              boxShadow: [
+                BoxShadow(color: AppColors.navyBlue.withOpacity(0.3), offset: const Offset(10, 10)),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(15),
+              child: Image.asset(
+                'assets/icons/n_queen_logo.png',
+                width: 100,
+                height: 100,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => const Icon(Icons.grid_4x4_rounded, color: AppColors.navyBlue, size: 60),
+              ),
             ),
           ),
         ),
-        const SizedBox(height: 30),
-        Text('N-Queens Solver', style: Theme.of(context).textTheme.displayLarge, textAlign: TextAlign.center),
-        const SizedBox(height: 8),
-        Container(width: 60, height: 2, color: AppColors.navyBlue.withOpacity(0.2)),
+        const SizedBox(height: 40),
+        Text('N-Queens\nPuzzle Studio', 
+          style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 38, height: 0.9), 
+          textAlign: TextAlign.center
+        ),
+        const SizedBox(height: 12),
       ],
     );
   }
 
-  Widget _buildSectionHeader(BuildContext context, String title, String subtitle) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 20),
+  Widget _buildFunkyHeader(BuildContext context, String title, String subtitle) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 25, left: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(subtitle.toUpperCase(), style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 10, letterSpacing: 2, color: AppColors.navyBlue, fontWeight: FontWeight.bold)),
-          Text(title, style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 28, color: AppColors.darkText)),
+          Text(subtitle.toUpperCase(), style: const TextStyle(fontFamily: 'DynaPuff', fontSize: 12, color: AppColors.navyBlue, fontWeight: FontWeight.bold, letterSpacing: 1)),
+          Text(title, style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 32, color: AppColors.darkText)),
         ],
       ),
     );
   }
 
-  Widget _buildActionButton(BuildContext context) {
+  Widget _buildStickerCard(BuildContext context, {
+    required String title, 
+    required String content, 
+    required IconData icon, 
+    required double rotation,
+    required Color color,
+  }) {
+    return Transform.rotate(
+      angle: rotation,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.navyBlue, width: 2),
+          boxShadow: [
+            BoxShadow(color: AppColors.navyBlue.withOpacity(0.15), offset: const Offset(6, 6)),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.navyBlue, width: 1.5),
+              ),
+              child: Icon(icon, color: AppColors.navyBlue, size: 24),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontFamily: 'DynaPuff', fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                  const SizedBox(height: 6),
+                  Text(content, style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 13, height: 1.4, color: AppColors.darkText)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMainActionButton(BuildContext context) {
     return Transform.rotate(
       angle: -0.02,
-      child: Container(
-        width: double.infinity,
-        height: 70,
-        decoration: BoxDecoration(
-          color: AppColors.gold,
-          borderRadius: BorderRadius.circular(15),
-          boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.15), offset: const Offset(4, 4))],
-        ),
-        child: ElevatedButton.icon(
-          onPressed: () {
-            Navigator.push(context, MaterialPageRoute(builder: (context) => SavedBoardsScreen(cameras: cameras)));
-          },
-          icon: const Icon(Icons.library_books_rounded, size: 28),
-          label: const Text('Open Board', style: TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 22)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.transparent,
-            foregroundColor: AppColors.navyBlue,
-            shadowColor: Colors.transparent,
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      child: GestureDetector(
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => SavedBoardsScreen(cameras: cameras))),
+        child: Container(
+          width: double.infinity,
+          height: 75,
+          decoration: BoxDecoration(
+            color: AppColors.gold,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.navyBlue, width: 3),
+            boxShadow: [
+              BoxShadow(color: AppColors.navyBlue, offset: const Offset(8, 8)),
+            ],
+          ),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.rocket_launch_rounded, size: 30, color: AppColors.navyBlue),
+              SizedBox(width: 15),
+              Text('ENTER STUDIO', style: TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 24, color: AppColors.navyBlue)),
+            ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildMinimalCard(BuildContext context, {required String title, required String content, required IconData icon}) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.navyBlue.withOpacity(0.1), width: 1.5),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), offset: const Offset(2, 2), blurRadius: 10)],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: AppColors.navyBlue, size: 28),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 18)),
-                const SizedBox(height: 8),
-                Text(content, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 14, height: 1.5)),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
