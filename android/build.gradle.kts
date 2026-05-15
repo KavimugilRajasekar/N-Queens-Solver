@@ -1,9 +1,23 @@
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://chaquo.com/maven") }
+    }
+    dependencies {
+        classpath("com.android.tools.build:gradle:7.4.2")
+        // Chaquopy plugin classpath removed – using plugins DSL with version
+    }
+}
+
 allprojects {
     repositories {
         google()
         mavenCentral()
+        maven { url = uri("https://chaquo.com/maven") }
     }
 }
+
 
 val newBuildDir: Directory =
     rootProject.layout.buildDirectory

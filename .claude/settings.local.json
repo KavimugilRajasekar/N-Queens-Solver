@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter clean *)",
+      "Bash(flutter pub *)",
+      "Bash(flutter run *)",
+      "WebFetch(domain:chaquo.com)",
+      "WebSearch",
+      "Bash(flutter build *)",
+      "Bash(./gradlew assembleDebug)",
+      "Bash(./gradlew clean *)",
+      "WebFetch(domain:pypi.org)"
+    ]
+  }
+}

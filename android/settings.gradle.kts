@@ -14,6 +14,8 @@ pluginManagement {
         google()
         mavenCentral()
         gradlePluginPortal()
+        // Chaquopy plugin repository
+        maven { url = uri("https://chaquo.com/maven") }
     }
 }
 

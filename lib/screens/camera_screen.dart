@@ -3,6 +3,7 @@ import 'package:camera/camera.dart';
 import '../constants/colors.dart';
 import '../utils/board_processor.dart';
 import 'result_screen.dart';
+import '../vision_engine.dart';
 
 class CameraScreen extends StatefulWidget {
   final CameraDescription camera;
@@ -44,7 +45,47 @@ class _CameraScreenState extends State<CameraScreen> {
 
     try {
       final image = await _controller.takePicture();
-      final boardData = await BoardProcessor.processImage(image.path, 8);
+
+      // -------------------------------------------------------
+      // Run the Python vision engine via Chaquopy
+      // -------------------------------------------------------
+      final pyResult = await VisionEngine.run(image.path);
+      final int size = pyResult['size'] as int;
+      final Map<String, dynamic> regionsMap =
+          Map<String, dynamic>.from(pyResult['regions'] as Map);
+
+      // Build colour grid – assign a deterministic colour per region.
+      List<List<Color>> grid = List.generate(
+          size,
+          (_) => List.filled(size, Colors.white, growable: false),
+          growable: false);
+      Map<int, BoardRegion> regionObjs = {};
+
+      regionsMap.forEach((key, value) {
+        final int regionId = int.parse(key);
+        final List<dynamic> coords = value as List<dynamic>;
+        if (coords.isEmpty) return;
+
+        // Use a palette colour for visual distinction.
+        final Color regionColor = Colors.primaries[regionId % Colors.primaries.length];
+
+        // Fill grid cells for this region.
+        for (var pair in coords) {
+          final List<dynamic> p = pair as List<dynamic>;
+          final int col = p[0] as int;
+          final int row = p[1] as int;
+          grid[row - 1][col - 1] = regionColor;
+        }
+
+        // Build BoardRegion for the ResultScreen.
+        final points = coords
+            .map((pair) => Point(pair[0] as int, pair[1] as int))
+            .toList();
+        regionObjs[regionId] =
+            BoardRegion(id: regionId, color: regionColor, coordinates: points);
+      });
+
+      final boardData = BoardData(size: size, grid: grid, regions: regionObjs);
 
       if (mounted) {
         Navigator.push(
@@ -92,7 +133,8 @@ class _CameraScreenState extends State<CameraScreen> {
               ],
             );
           } else {
-            return const Center(child: CircularProgressIndicator(color: AppColors.navyBlue));
+            return const Center(
+                child: CircularProgressIndicator(color: AppColors.navyBlue));
           }
         },
       ),
@@ -107,7 +149,8 @@ class _CameraScreenState extends State<CameraScreen> {
           angle: -0.1,
           child: IconButton(
             onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.close_rounded, color: AppColors.navyBlue, size: 30),
+            icon: const Icon(Icons.close_rounded,
+                color: AppColors.navyBlue, size: 30),
             style: IconButton.styleFrom(
               backgroundColor: Colors.white,
               padding: const EdgeInsets.all(12),
@@ -139,15 +182,20 @@ class _CameraScreenState extends State<CameraScreen> {
     return Stack(
       children: [
         ColorFiltered(
-          colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.3), BlendMode.srcOut),
+          colorFilter:
+              ColorFilter.mode(Colors.black.withOpacity(0.3), BlendMode.srcOut),
           child: Stack(
             children: [
-              Container(decoration: const BoxDecoration(color: Colors.black, backgroundBlendMode: BlendMode.dstOut)),
+              Container(
+                  decoration: const BoxDecoration(
+                      color: Colors.black, backgroundBlendMode: BlendMode.dstOut)),
               Center(
                 child: Container(
                   width: 280,
                   height: 280,
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(40)),
+                  decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(40)),
                 ),
               ),
             ],
@@ -171,7 +219,12 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 
-  Widget _buildFunkyCorner({double? top, double? bottom, double? left, double? right, double angle = 0}) {
+  Widget _buildFunkyCorner(
+      {double? top,
+      double? bottom,
+      double? left,
+      double? right,
+      double angle = 0}) {
     return Positioned(
       top: top,
       bottom: bottom,
@@ -221,7 +274,8 @@ class _CameraScreenState extends State<CameraScreen> {
                 shape: BoxShape.circle,
                 color: AppColors.gold,
               ),
-              child: const Icon(Icons.camera_alt_rounded, color: AppColors.navyBlue, size: 45),
+              child: const Icon(Icons.camera_alt_rounded,
+                  color: AppColors.navyBlue, size: 45),
             ),
           ),
         ),
