@@ -10,6 +10,7 @@ import '../widgets/notebook_painter.dart';
 import '../widgets/error_dialog.dart';
 import '../widgets/success_dialog.dart';
 import '../widgets/library/board_card.dart';
+import '../utils/qr_crypto.dart';
 
 class QRScannerScreen extends StatefulWidget {
   const QRScannerScreen({super.key});
@@ -62,7 +63,8 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     setState(() {});
 
     try {
-      final List<dynamic> data = jsonDecode(rawData);
+      final String decryptedData = QRCrypto.decrypt(rawData);
+      final List<dynamic> data = jsonDecode(decryptedData);
       final existingBoards = await StorageManager.loadBoards();
       List<Map<String, dynamic>> pending = [];
 

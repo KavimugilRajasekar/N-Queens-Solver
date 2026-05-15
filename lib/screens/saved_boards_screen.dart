@@ -19,6 +19,7 @@ import '../utils/board_generator.dart';
 import '../widgets/error_dialog.dart';
 import '../widgets/success_dialog.dart';
 import 'generate_board_screen.dart';
+import '../utils/qr_crypto.dart';
 
 class SavedBoardsScreen extends StatefulWidget {
   final List<CameraDescription> cameras;
@@ -421,7 +422,8 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
     }
     
     final String jsonStr = jsonEncode(exportData);
-    QRShareDialog.show(context, jsonStr);
+    final String encryptedData = QRCrypto.encrypt(jsonStr);
+    QRShareDialog.show(context, encryptedData);
   }
 
   Widget _buildAddButton() {
