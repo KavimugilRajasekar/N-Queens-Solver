@@ -1,13 +1,18 @@
+import '../widgets/board/victory_dialog.dart';
+import '../widgets/board/algorithm_flow.dart';
+import '../widgets/board/board_grid.dart';
+import '../widgets/board/board_palette.dart';
+import '../widgets/board/board_header.dart';
+import '../widgets/board/action_buttons.dart';
+import '../widgets/notebook_painter.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:lottie/lottie.dart';
 import '../widgets/error_dialog.dart';
 import '../constants/colors.dart';
 import '../utils/board_processor.dart';
 import '../constants/region_colors.dart';
 import '../utils/solver_logic.dart';
 import '../utils/storage_manager.dart';
-import '../widgets/notebook_painter.dart';
 
 class NQueensBoardScreen extends StatefulWidget {
   final BoardData boardData;
@@ -43,7 +48,6 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
   int _secondsElapsed = 0;
   Timer? _timer;
   Map<String, int> _manualGrid = {}; // "r,c" -> 0: empty, 1: X, 2: Queen
-  int? _lastSwipedR, _lastSwipedC;
 
   @override
   void initState() {
@@ -76,18 +80,7 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
   Future<void> _startSolving() async {
     if (_isSolving || _isEditing) return;
 
-    // Check for invalid regions (ID > N)
-    bool hasInvalidRegions = false;
-    for (int r = 0; r < widget.boardData.size; r++) {
-      for (int c = 0; c < widget.boardData.size; c++) {
-        if (widget.boardData.regionIds[r][c] > widget.boardData.size) {
-          hasInvalidRegions = true;
-          break;
-        }
-      }
-    }
-
-    if (hasInvalidRegions) {
+    if (_hasConflicts()) {
       FunkyErrorDialog.show(context,
         title: 'Oops!',
         message: 'Some regions are invalid! Fix the Funky-X marks using Edit before solving.',
@@ -114,14 +107,12 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
         int delay = step.isBacktrack ? 400 : 600;
         await Future.delayed(Duration(milliseconds: delay));
       } else {
-        // Very tiny delay to allow UI to breathe but feel "instant"
         await Future.delayed(const Duration(milliseconds: 5));
       }
     }
     setState(() {
       _isSolving = false;
       _isFastForward = false;
-      // Automatically save the solution to the board data and storage if successful
       if (_queenPositions.length == widget.boardData.size) {
         widget.boardData.solution = Map.from(_queenPositions);
         if (widget.isAlreadySaved && widget.boardId != null) {
@@ -134,7 +125,6 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
   Future<void> _startManualMode() async {
     if (_isSolving || _isEditing) return;
 
-    // 1. Check for solvability (silent)
     final solver = NQueensSolver(widget.boardData);
     bool hasSolution = false;
     await for (final step in solver.solve()) {
@@ -154,7 +144,6 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
       return;
     }
 
-    // 2. Initialize Manual Mode
     setState(() {
       _isManualMode = true;
       _isPaused = false;
@@ -191,18 +180,6 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
     _checkWinCondition();
   }
 
-  void _handleManualSwipe(int r, int c) {
-    if (_isPaused || (_lastSwipedR == r && _lastSwipedC == c)) return;
-    _lastSwipedR = r;
-    _lastSwipedC = c;
-    String key = "$r,$c";
-    setState(() {
-      // Swipe only marks X
-      if ((_manualGrid[key] ?? 0) != 2) {
-        _manualGrid[key] = 1;
-      }
-    });
-  }
 
   void _updateQueenPositionsFromManual() {
     _queenPositions.clear();
@@ -219,7 +196,6 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
 
   void _checkWinCondition() {
     if (_queenPositions.length == widget.boardData.size) {
-      // Check if all queens follow rules
       Map<int, int> rows = {}, cols = {}, regions = {};
       bool conflict = false;
 
@@ -234,7 +210,6 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
 
         if (rows[r]! > 1 || cols[c]! > 1 || regions[regId]! > 1) conflict = true;
         
-        // Neighborhood check
         _queenPositions.values.forEach((p2) {
           if (p == p2) return;
           if ((p.x - p2.x).abs() <= 1 && (p.y - p2.y).abs() <= 1) conflict = true;
@@ -244,10 +219,16 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
       if (!conflict && regions.length == widget.boardData.size) {
         _timer?.cancel();
         
-        // Mark as manually solved and save
         widget.boardData.isManuallySolved = true;
-        if (widget.isAlreadySaved && widget.boardId != null) {
+        if (_isSaved && widget.boardId != null) {
           StorageManager.updateBoard(widget.boardId!, widget.boardData);
+        } else {
+          // Auto-save if not already saved in library
+          StorageManager.saveBoard(widget.boardData).then((_) {
+            if (mounted) {
+              setState(() => _isSaved = true);
+            }
+          });
         }
 
         showDialog(
@@ -257,6 +238,82 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
         );
       }
     }
+  }
+
+  Map<String, dynamic> _getManualConflicts() {
+    Map<String, dynamic> conflicts = {
+      'rows': <int>{},
+      'cols': <int>{},
+      'regions': <int>{},
+      'neighborhood': <String>{},
+      'queens': <String>{},
+    };
+    
+    if (!_isManualMode) return conflicts;
+
+    List<Point> queens = [];
+    _manualGrid.forEach((key, val) {
+      if (val == 2) {
+        final parts = key.split(',');
+        queens.add(Point(int.parse(parts[0]) + 1, int.parse(parts[1]) + 1));
+      }
+    });
+
+    for (int i = 0; i < queens.length; i++) {
+      Point p1 = queens[i];
+      int r1 = p1.x - 1;
+      int c1 = p1.y - 1;
+      int reg1 = widget.boardData.regionIds[r1][c1];
+
+      for (int j = i + 1; j < queens.length; j++) {
+        Point p2 = queens[j];
+        int r2 = p2.x - 1;
+        int c2 = p2.y - 1;
+        int reg2 = widget.boardData.regionIds[r2][c2];
+
+        bool pairHasConflict = false;
+
+        if (r1 == r2) {
+          (conflicts['rows'] as Set<int>).add(r1);
+          pairHasConflict = true;
+        }
+        if (c1 == c2) {
+          (conflicts['cols'] as Set<int>).add(c1);
+          pairHasConflict = true;
+        }
+        if (reg1 == reg2) {
+          (conflicts['regions'] as Set<int>).add(reg1);
+          pairHasConflict = true;
+        }
+        if ((r1 - r2).abs() <= 1 && (c1 - c2).abs() <= 1) {
+          // Add all neighbors of p1
+          for (int dr = -1; dr <= 1; dr++) {
+            for (int dc = -1; dc <= 1; dc++) {
+              int nr = r1 + dr, nc = c1 + dc;
+              if (nr >= 0 && nr < widget.boardData.size && nc >= 0 && nc < widget.boardData.size) {
+                (conflicts['neighborhood'] as Set<String>).add("$nr,$nc");
+              }
+            }
+          }
+          // Add all neighbors of p2
+          for (int dr = -1; dr <= 1; dr++) {
+            for (int dc = -1; dc <= 1; dc++) {
+              int nr = r2 + dr, nc = c2 + dc;
+              if (nr >= 0 && nr < widget.boardData.size && nc >= 0 && nc < widget.boardData.size) {
+                (conflicts['neighborhood'] as Set<String>).add("$nr,$nc");
+              }
+            }
+          }
+          pairHasConflict = true;
+        }
+
+        if (pairHasConflict) {
+          (conflicts['queens'] as Set<String>).add("$r1,$c1");
+          (conflicts['queens'] as Set<String>).add("$r2,$c2");
+        }
+      }
+    }
+    return conflicts;
   }
 
   String formatTime(int seconds) {
@@ -326,8 +383,6 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
 
       widget.boardData.regions.clear();
       widget.boardData.regions.addAll(newRegions);
-
-      // Clear previous solution as the board configuration has changed
       widget.boardData.solution = null;
       _queenPositions.clear();
       _solverSteps.clear();
@@ -369,6 +424,17 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
     });
   }
 
+  bool _hasConflicts() {
+    for (int r = 0; r < widget.boardData.size; r++) {
+      for (int c = 0; c < widget.boardData.size; c++) {
+        if (widget.boardData.regionIds[r][c] > widget.boardData.size) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     double boardScale = _isEditing ? 0.9 : 0.75;
@@ -396,16 +462,59 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildHeader(),
+                    BoardHeader(
+                      isManualMode: _isManualMode,
+                      isPaused: _isPaused,
+                      isEditing: _isEditing,
+                      isSolving: _isSolving,
+                      isFastForward: _isFastForward,
+                      formattedTime: formatTime(_secondsElapsed),
+                      onFastForward: () => setState(() => _isFastForward = true),
+                    ),
                     const SizedBox(height: 30),
-                    if (_isEditing) _buildPalette(),
+                    if (_isEditing) 
+                      BoardPalette(
+                        boardSize: widget.boardData.size, 
+                        selectedRegionId: _selectedRegionId, 
+                        onRegionSelected: (id) => setState(() => _selectedRegionId = id),
+                      ),
                     const SizedBox(height: 20),
-                    _buildMainBoard(boardScale),
+                    BoardGrid(
+                      boardScale: boardScale,
+                      boardData: widget.boardData,
+                      isEditing: _isEditing,
+                      isManualMode: _isManualMode,
+                      isPaused: _isPaused,
+                      queenPositions: _queenPositions,
+                      manualGrid: _manualGrid,
+                      tempGrid: _tempGrid,
+                      conflicts: _getManualConflicts(),
+                      onCellTap: (r, c) => _isManualMode ? _handleManualTap(r, c) : _handleCellTap(r, c),
+                      onPanEnd: () => setState(() {}),
+                    ),
                     const SizedBox(height: 30),
-                    _buildActionButtons(),
+                    ActionButtons(
+                      isManualMode: _isManualMode,
+                      isPaused: _isPaused,
+                      isSolving: _isSolving,
+                      isEditing: _isEditing,
+                      hasConflicts: _hasConflicts(),
+                      formattedTime: formatTime(_secondsElapsed),
+                      onTogglePause: _togglePause,
+                      onQuitManual: () => setState(() { _isManualMode = false; _timer?.cancel(); }),
+                      onToggleEdit: _toggleEditMode,
+                      onSolve: _startSolving,
+                      onSaveEdits: _saveEdits,
+                      onStartManual: _startManualMode,
+                    ),
                     if (!_isManualMode) ...[
                       const SizedBox(height: 30),
-                      if (!_isEditing && _solverSteps.isNotEmpty) _buildAlgorithmFlow(),
+                      if (!_isEditing && _solverSteps.isNotEmpty) 
+                        AlgorithmFlow(
+                          solverSteps: _solverSteps, 
+                          scrollController: _logScrollController, 
+                          boardData: widget.boardData,
+                        ),
                       const SizedBox(height: 30),
                       if (!_isEditing) _buildLibraryButtons(),
                     ],
@@ -414,401 +523,6 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
                 ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Transform.rotate(
-          angle: 0.02,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.navyBlue, width: 2), boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(4, 4))]),
-            child: Text(
-              _isManualMode 
-                  ? (_isPaused ? 'Paused' : 'Solving...')
-                  : (_isEditing ? 'Correcting Regions...' : 'N-Queens Board'), 
-              style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 24, fontFamily: 'DynaPuff')
-            ),
-          ),
-        ),
-        if (_isManualMode)
-          Transform.rotate(
-            angle: -0.01,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(color: AppColors.gold, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.navyBlue, width: 2), boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(4, 4))]),
-              child: Text(
-                formatTime(_secondsElapsed),
-                style: const TextStyle(fontFamily: 'DynaPuff', fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
-              ),
-            ),
-          ),
-        if (_isSolving) ...[
-          const SizedBox(width: 12),
-          IconButton(
-            onPressed: () => setState(() => _isFastForward = true),
-            icon: Icon(
-              Icons.fast_forward_rounded, 
-              color: _isFastForward ? AppColors.gold : AppColors.navyBlue, 
-              size: 32
-            ),
-            tooltip: 'Fast Forward Solution',
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildPalette() {
-    return Center(
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 10,
-        children: List.generate(widget.boardData.size, (i) => _buildPaletteItem(i + 1)),
-      ),
-    );
-  }
-
-  Widget _buildPaletteItem(int id) {
-    bool isSelected = _selectedRegionId == id;
-    Color color = RegionColors.getRegionColor(id, widget.boardData.size);
-    return GestureDetector(
-      onTap: () => setState(() => _selectedRegionId = id),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(color: isSelected ? AppColors.navyBlue : Colors.white, width: isSelected ? 3 : 1.5),
-          boxShadow: [if (isSelected) BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), blurRadius: 8)],
-        ),
-        child: Center(child: Text('$id', style: TextStyle(fontWeight: FontWeight.bold, color: isSelected ? AppColors.navyBlue : Colors.black54, fontSize: 12))),
-      ),
-    );
-  }
-
-  Widget _buildMainBoard(double boardScale) {
-    return Center(
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: _isEditing ? AppColors.gold : AppColors.navyBlue, width: 3), boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(8, 8))]),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: SizedBox(
-            width: MediaQuery.of(context).size.width * boardScale,
-            height: MediaQuery.of(context).size.width * boardScale,
-            child: GestureDetector(
-              onPanUpdate: _isManualMode ? (details) {
-                RenderBox box = context.findRenderObject() as RenderBox;
-                Offset localOffset = box.globalToLocal(details.globalPosition);
-                // Adjust for padding and container
-                double cellSize = (MediaQuery.of(context).size.width * boardScale) / widget.boardData.size;
-                int c = (localOffset.dx / cellSize).floor();
-                int r = (localOffset.dy / cellSize).floor();
-                if (r >= 0 && r < widget.boardData.size && c >= 0 && c < widget.boardData.size) {
-                  _handleManualSwipe(r, c);
-                }
-              } : null,
-              onPanEnd: _isManualMode ? (_) => setState(() { _lastSwipedR = null; _lastSwipedC = null; }) : null,
-              child: GridView.builder(
-                padding: EdgeInsets.zero,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: widget.boardData.size),
-                itemCount: widget.boardData.size * widget.boardData.size,
-                itemBuilder: (context, index) {
-                  int r = index ~/ widget.boardData.size;
-                  int c = index % widget.boardData.size;
-                  
-                  bool hasQueen = _isManualMode 
-                      ? (_manualGrid["$r,$c"] == 2)
-                      : _queenPositions.values.any((p) => p.x - 1 == r && p.y - 1 == c);
-                  
-                  bool hasX = _isManualMode && (_manualGrid["$r,$c"] == 1);
-                  
-                  int id = _isEditing ? _tempGrid![r][c] : widget.boardData.regionIds[r][c];
-                  bool isInvalid = id > widget.boardData.size;
-  
-                  return GestureDetector(
-                    onTap: _isManualMode ? () => _handleManualTap(r, c) : () => _handleCellTap(r, c),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: RegionColors.getRegionColor(id, widget.boardData.size), 
-                        border: Border.all(color: Colors.black.withOpacity(0.05), width: 0.5)
-                      ),
-                      child: Stack(
-                        children: [
-                          if (hasQueen) 
-                            Center(child: Icon(Icons.stars_rounded, color: AppColors.navyBlue, size: (MediaQuery.of(context).size.width * boardScale * 0.8) / widget.boardData.size)),
-                          if (hasX)
-                            Center(child: Text('x', style: TextStyle(fontFamily: 'Comfortaa', fontSize: (MediaQuery.of(context).size.width * boardScale * 0.5) / widget.boardData.size, color: AppColors.navyBlue.withOpacity(0.4), fontWeight: FontWeight.bold))),
-                          if (!hasQueen && !hasX && isInvalid)
-                            Center(
-                              child: Transform.rotate(
-                                angle: 0.1,
-                                child: Icon(
-                                  Icons.close_rounded, 
-                                  color: AppColors.navyBlue.withOpacity(0.3), 
-                                  size: (MediaQuery.of(context).size.width * boardScale * 0.6) / widget.boardData.size
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionButtons() {
-    bool hasConflicts = false;
-    for (int r = 0; r < widget.boardData.size; r++) {
-      for (int c = 0; c < widget.boardData.size; c++) {
-        if (widget.boardData.regionIds[r][c] > widget.boardData.size) {
-          hasConflicts = true;
-          break;
-        }
-      }
-    }
-
-    bool canSolve = !hasConflicts && !_isSolving && !_isEditing && !_isManualMode;
-
-    return Column(
-      children: [
-        if (_isManualMode) ...[
-          Transform.rotate(
-            angle: 0.01,
-            child: Container(
-              width: double.infinity,
-              height: 65,
-              decoration: BoxDecoration(
-                color: _isPaused ? AppColors.gold : Colors.white,
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: AppColors.navyBlue, width: 2),
-                boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(4, 4))],
-              ),
-              child: ElevatedButton.icon(
-                onPressed: _togglePause,
-                icon: Icon(_isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded, color: AppColors.navyBlue),
-                label: Text(
-                  _isPaused ? 'Resume (${formatTime(_secondsElapsed)})' : 'Pause',
-                  style: const TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.navyBlue),
-                ),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, elevation: 0),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Transform.rotate(
-            angle: -0.01,
-            child: Container(
-              width: double.infinity,
-              height: 65,
-              decoration: BoxDecoration(
-                color: Colors.redAccent.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: Colors.redAccent, width: 2),
-              ),
-              child: ElevatedButton.icon(
-                onPressed: () => setState(() { _isManualMode = false; _timer?.cancel(); }),
-                icon: const Icon(Icons.exit_to_app_rounded, color: Colors.redAccent),
-                label: const Text('Quit Manual Mode', style: TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 18, color: Colors.redAccent)),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, elevation: 0),
-              ),
-            ),
-          ),
-        ] else ...[
-          Row(
-            children: [
-              Expanded(
-                child: Transform.rotate(
-                  angle: 0.02,
-                  child: Container(
-                    height: 60,
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: AppColors.navyBlue, width: 2), boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.15), offset: const Offset(4, 4))]),
-                    child: ElevatedButton.icon(
-                      onPressed: _isSolving ? null : _toggleEditMode,
-                      icon: Icon(_isEditing ? Icons.close_rounded : Icons.edit_note_rounded, color: _isEditing ? Colors.red : AppColors.navyBlue),
-                      label: Text(_isEditing ? 'Cancel' : 'Edit', style: TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 18, color: _isEditing ? Colors.red : AppColors.navyBlue)),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, elevation: 0),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Transform.rotate(
-                  angle: -0.01,
-                  child: Container(
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: _isSolving 
-                          ? Colors.grey.shade300 
-                          : (hasConflicts ? Colors.grey.shade200 : AppColors.gold), 
-                      borderRadius: BorderRadius.circular(15), 
-                      border: Border.all(color: AppColors.navyBlue.withOpacity(hasConflicts ? 0.3 : 1.0), width: 2), 
-                      boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(hasConflicts ? 0.05 : 0.2), offset: const Offset(4, 4))]
-                    ),
-                    child: ElevatedButton.icon(
-                      onPressed: canSolve ? _startSolving : (_isEditing ? _saveEdits : null),
-                      icon: _isSolving 
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.navyBlue)) 
-                          : Icon(_isEditing ? Icons.check_circle_rounded : Icons.auto_fix_high_rounded, color: AppColors.navyBlue.withOpacity(hasConflicts && !_isEditing ? 0.4 : 1.0)),
-                      label: Text(_isSolving ? 'Solving...' : (_isEditing ? 'Save' : 'Solve'), style: TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.navyBlue.withOpacity(hasConflicts && !_isEditing ? 0.4 : 1.0))),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, elevation: 0),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Transform.rotate(
-            angle: 0.01,
-            child: Container(
-              width: double.infinity,
-              height: 65,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: AppColors.navyBlue, width: 2),
-                boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.15), offset: const Offset(4, 4))],
-              ),
-              child: ElevatedButton.icon(
-                onPressed: canSolve ? _startManualMode : null,
-                icon: Icon(Icons.videogame_asset_rounded, color: canSolve ? AppColors.navyBlue : Colors.grey),
-                label: Text(
-                  'Do it',
-                  style: TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 20, color: canSolve ? AppColors.navyBlue : Colors.grey),
-                ),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, elevation: 0),
-              ),
-            ),
-          ),
-        ],
-        if (hasConflicts && !_isEditing && !_isManualMode) ...[
-          const SizedBox(height: 24),
-          _buildFunkyConflictPrompt(),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildFunkyConflictPrompt() {
-    return Transform.rotate(
-      angle: -0.01,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFF9C4), // Soft Lemon Yellow
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: AppColors.gold, width: 2),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), offset: const Offset(4, 4))],
-        ),
-        child: const Row(
-          children: [
-            Icon(Icons.auto_fix_high_rounded, color: AppColors.navyBlue),
-            SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                "Whoops! Some regions are messy. Tap 'Edit' to fix the Funky-X marks!",
-                style: TextStyle(fontFamily: 'DynaPuff', fontSize: 14, color: AppColors.navyBlue, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAlgorithmFlow() {
-    return Transform.rotate(
-      angle: 0.01,
-      child: Container(
-        width: double.infinity,
-        height: 450,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(25), border: Border.all(color: AppColors.navyBlue.withOpacity(0.5), width: 2.5), boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.1), offset: const Offset(6, 6))]),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(children: [Icon(Icons.history_edu_rounded, color: AppColors.navyBlue), SizedBox(width: 10), Text('Solving Timeline', style: TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, color: AppColors.navyBlue, fontSize: 20))]),
-            const Divider(thickness: 1.5),
-            Expanded(child: ListView.builder(controller: _logScrollController, itemCount: _solverSteps.length, itemBuilder: (context, index) => _buildStepItem(_solverSteps[index]))),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStepItem(SolverStep step) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(15), border: Border.all(color: step.isBacktrack ? Colors.red.withOpacity(0.3) : AppColors.navyBlue.withOpacity(0.1)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), offset: const Offset(2, 2))]),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 140,
-                height: 140,
-                decoration: BoxDecoration(color: Colors.white, border: Border.all(color: AppColors.navyBlue, width: 2), borderRadius: BorderRadius.circular(8)),
-                child: GridView.builder(
-                  padding: EdgeInsets.zero,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: widget.boardData.size),
-                  itemCount: widget.boardData.size * widget.boardData.size,
-                  itemBuilder: (context, i) {
-                    int r = i ~/ widget.boardData.size;
-                    int c = i % widget.boardData.size;
-                    bool hasQueen = step.queenPositions.values.any((p) => p.x - 1 == r && p.y - 1 == c);
-                    bool isValidDomain = false;
-                    for (var entry in widget.boardData.regions.entries) {
-                      if (entry.value.coordinates.any((p) => p.x - 1 == r && p.y - 1 == c)) {
-                        isValidDomain = step.domains[entry.key]?.any((p) => p.x - 1 == r && p.y - 1 == c) ?? false;
-                        break;
-                      }
-                    }
-                    Color cellColor = RegionColors.getRegionColor(widget.boardData.regionIds[r][c], widget.boardData.size);
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: isValidDomain ? cellColor : cellColor.withOpacity(0.15), 
-                        border: Border.all(color: Colors.black.withOpacity(0.03), width: 0.2)
-                      ), 
-                      child: hasQueen ? const Center(child: Icon(Icons.stars_rounded, size: 10, color: AppColors.navyBlue)) : null
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(step.isBacktrack ? "RETREATING" : "ACTION", style: TextStyle(fontFamily: 'DynaPuff', fontSize: 10, color: step.isBacktrack ? Colors.red : Colors.green, letterSpacing: 1.2, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text(step.message, style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 13, color: AppColors.darkText, height: 1.4, fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              ),
-            ],
           ),
         ],
       ),
@@ -832,7 +546,6 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
                     await StorageManager.saveBoard(widget.boardData);
                     if (mounted) {
                       setState(() => _isSaved = true);
-                      // ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Board saved to library!')));
                     }
                   },
                   icon: const Icon(Icons.bookmark_add_rounded, size: 24, color: AppColors.navyBlue),
@@ -857,76 +570,6 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class VictoryDialog extends StatelessWidget {
-  final String time;
-  const VictoryDialog({super.key, required this.time});
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: AppColors.navyBlue, width: 3),
-          boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(8, 8))],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              height: 200,
-              child: Lottie.asset(
-                'assets/json/trophy.json',
-                repeat: true,
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'VICTORY!',
-              style: TextStyle(fontFamily: 'DynaPuff', fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'You mastered the board in $time!',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.darkText),
-            ),
-            const SizedBox(height: 30),
-            Transform.rotate(
-              angle: -0.02,
-              child: Container(
-                width: double.infinity,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: AppColors.gold,
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: AppColors.navyBlue, width: 2),
-                  boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(4, 4))],
-                ),
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context); // Close dialog
-                    Navigator.pop(context); // Back to Library
-                  },
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, elevation: 0),
-                  child: const Text(
-                    'CELEBRATE & EXIT',
-                    style: TextStyle(fontFamily: 'DynaPuff', fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
