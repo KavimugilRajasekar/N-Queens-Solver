@@ -143,7 +143,7 @@ class ResultScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 16),
                           SelectableText(
-                            _formatOutput(),
+                            boardData.rawResponse,
                             style: const TextStyle(
                               fontFamily: 'Comfortaa',
                               fontSize: 14,
@@ -205,15 +205,5 @@ class ResultScreen extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String _formatOutput() {
-    StringBuffer buffer = StringBuffer();
-    boardData.regions.forEach((id, region) {
-      buffer.write('Q$id = [');
-      buffer.write(region.coordinates.join(', '));
-      buffer.write(']\n');
-    });
-    return buffer.toString();
   }
 }

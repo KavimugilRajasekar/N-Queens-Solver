@@ -1,5 +1,9 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:path/path.dart' as path;
 import 'package:image/image.dart' as img;
 
 class BoardRegion {
@@ -24,103 +28,197 @@ class BoardData {
   final int size;
   final List<List<Color>> grid;
   final Map<int, BoardRegion> regions;
+  final String rawResponse;
 
-  BoardData({required this.size, required this.grid, required this.regions});
+  BoardData({
+    required this.size,
+    required this.grid,
+    required this.regions,
+    required this.rawResponse,
+  });
 }
 
 class BoardProcessor {
+  static const String _apiUrl = 'https://image-processor-livid.vercel.app/process-image';
+
+  static final List<Color> _regionPalette = [
+    Colors.blue.shade100,
+    Colors.green.shade100,
+    Colors.orange.shade100,
+    Colors.purple.shade100,
+    Colors.pink.shade100,
+    Colors.teal.shade100,
+    Colors.amber.shade100,
+    Colors.cyan.shade100,
+    Colors.indigo.shade100,
+    Colors.lime.shade100,
+    Colors.brown.shade100,
+    Colors.deepOrange.shade100,
+  ];
+
   static Future<BoardData> processImage(String imagePath, int size) async {
-    final bytes = await File(imagePath).readAsBytes();
-    final image = img.decodeImage(bytes);
+    try {
+      debugPrint('Processing image for upload: $imagePath');
 
-    if (image == null) throw Exception('Could not decode image');
-
-    // Square crop
-    int width = image.width;
-    int height = image.height;
-    int side = width < height ? width : height;
-    int xOffset = (width - side) ~/ 2;
-    int yOffset = (height - side) ~/ 2;
-
-    final cropped = img.copyCrop(image, x: xOffset, y: yOffset, width: side, height: side);
-    
-    // 1. Collect all sample colors
-    int cellSide = side ~/ size;
-    List<Color> sampleColors = [];
-    List<Point> points = [];
-    
-    for (int r = 0; r < size; r++) {
-      for (int c = 0; c < size; c++) {
-        int centerX = c * cellSide + cellSide ~/ 2;
-        int centerY = r * cellSide + cellSide ~/ 2;
-        final pixel = cropped.getPixel(centerX, centerY);
-        sampleColors.add(Color.fromARGB(255, pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt()));
-        points.add(Point(c + 1, r + 1));
-      }
-    }
-
-    // 2. Cluster colors into exactly 'size' (N) regions
-    // We'll use a simple iterative approach to find N representative colors
-    List<Color> centroids = [];
-    if (sampleColors.isNotEmpty) {
-      centroids.add(sampleColors[0]);
-      while (centroids.length < size && centroids.length < sampleColors.length) {
-        // Find the color furthest from existing centroids
-        Color? bestColor;
-        double maxDist = -1;
+      // 1. Image Preprocessing (Orientation + Square Crop)
+      final bytes = await File(imagePath).readAsBytes();
+      img.Image? originalImage = img.decodeImage(bytes);
+      
+      if (originalImage != null) {
+        // Fix orientation based on EXIF
+        img.Image fixedImage = img.bakeOrientation(originalImage);
         
-        for (var color in sampleColors) {
-          double minDistToCentroid = centroids.map((c) => _colorDistance(color, c)).reduce((a, b) => a < b ? a : b);
-          if (minDistToCentroid > maxDist) {
-            maxDist = minDistToCentroid;
-            bestColor = color;
+        // Square crop to match viewfinder (Center of the image)
+        int width = fixedImage.width;
+        int height = fixedImage.height;
+        int side = width < height ? width : height;
+        int xOffset = (width - side) ~/ 2;
+        int yOffset = (height - side) ~/ 2;
+
+        img.Image squareImage = img.copyCrop(
+          fixedImage, 
+          x: xOffset, 
+          y: yOffset, 
+          width: side, 
+          height: side
+        );
+
+        // Optional: If the user reports a "left turn", we can rotate CW
+        // But bakeOrientation usually solves this. We'll stick to bakeOrientation + Crop.
+        
+        final processedBytes = img.encodeJpg(squareImage, quality: 90);
+        await File(imagePath).writeAsBytes(processedBytes);
+        debugPrint('Image orientation fixed and square-cropped.');
+      }
+      
+      // 2. Create Multipart Request
+      var request = http.MultipartRequest('POST', Uri.parse(_apiUrl));
+      String fileName = path.basename(imagePath);
+      
+      request.files.add(await http.MultipartFile.fromPath(
+        'file', 
+        imagePath,
+        filename: fileName,
+        contentType: MediaType('image', 'jpeg'),
+      ));
+
+      debugPrint('Uploading square-cropped image to API...');
+      var streamedResponse = await request.send().timeout(const Duration(seconds: 45));
+      var response = await http.Response.fromStream(streamedResponse);
+
+      debugPrint('API Status Code: ${response.statusCode}');
+      debugPrint('API Raw Response: ${response.body}');
+
+      if (response.statusCode != 200) {
+        throw Exception('Server Error (${response.statusCode}):\n${response.body}');
+      }
+
+      // 3. Parse Response
+      String responseBody = response.body;
+      Map<int, List<Point>> regionMap = _parseApiResponse(responseBody);
+
+      if (regionMap.isEmpty) {
+        throw Exception('API succeeded but returned no region data.\nResponse: $responseBody');
+      }
+
+      // 4. Robust Indexing Detection
+      // Check the maximum coordinate value in the response
+      int maxCoord = 0;
+      for (var coords in regionMap.values) {
+        for (var pt in coords) {
+          if (pt.x > maxCoord) maxCoord = pt.x;
+          if (pt.y > maxCoord) maxCoord = pt.y;
+        }
+      }
+      
+      // If max coordinate is exactly 'size' (e.g. 8), it must be 1-based.
+      // If max coordinate is less than 'size' (e.g. 7), it's 0-based.
+      bool isZeroBased = maxCoord < size;
+      debugPrint('Max coordinate seen: $maxCoord. Detected: ${isZeroBased ? "0-based" : "1-based"}');
+
+      // 5. Construct BoardData
+      final grid = List.generate(size, (_) => List.filled(size, Colors.white));
+      final regions = <int, BoardRegion>{};
+
+      regionMap.forEach((id, coords) {
+        Color color = _regionPalette[(id - 1) % _regionPalette.length];
+        
+        regions[id] = BoardRegion(
+          id: id,
+          color: color,
+          coordinates: coords,
+        );
+
+        for (var pt in coords) {
+          int gridX = isZeroBased ? pt.x : pt.x - 1;
+          int gridY = isZeroBased ? pt.y : pt.y - 1;
+
+          if (gridX >= 0 && gridX < size && gridY >= 0 && gridY < size) {
+            grid[gridY][gridX] = color;
           }
         }
-        if (bestColor != null) centroids.add(bestColor);
-      }
-    }
+      });
 
-    // 3. Map each cell to the nearest centroid
-    final grid = List.generate(size, (_) => List.filled(size, Colors.white));
-    final Map<int, List<Point>> regionCoordinates = {};
-    final Map<int, Color> regionColors = {};
-
-    for (int i = 0; i < sampleColors.length; i++) {
-      Color color = sampleColors[i];
-      Point pt = points[i];
-      
-      int bestCentroidIdx = 0;
-      double minDist = double.infinity;
-      
-      for (int j = 0; j < centroids.length; j++) {
-        double dist = _colorDistance(color, centroids[j]);
-        if (dist < minDist) {
-          minDist = dist;
-          bestCentroidIdx = j;
-        }
-      }
-
-      int regionId = bestCentroidIdx + 1;
-      grid[pt.y - 1][pt.x - 1] = centroids[bestCentroidIdx];
-      regionColors[regionId] = centroids[bestCentroidIdx];
-      regionCoordinates.putIfAbsent(regionId, () => []).add(pt);
-    }
-
-    final regions = <int, BoardRegion>{};
-    regionCoordinates.forEach((id, coords) {
-      regions[id] = BoardRegion(
-        id: id,
-        color: regionColors[id]!,
-        coordinates: coords,
+      return BoardData(
+        size: size,
+        grid: grid,
+        regions: regions,
+        rawResponse: responseBody,
       );
-    });
-
-    return BoardData(size: size, grid: grid, regions: regions);
+    } catch (e) {
+      debugPrint('Fatal Error in BoardProcessor: $e');
+      rethrow;
+    }
   }
 
-  static double _colorDistance(Color c1, Color c2) {
-    return (c1.red - c2.red).abs().toDouble() + 
-           (c1.green - c2.green).abs().toDouble() + 
-           (c1.blue - c2.blue).abs().toDouble();
+  static Map<int, List<Point>> _parseApiResponse(String body) {
+    final Map<int, List<Point>> result = {};
+    final regionRegex = RegExp(r'Q(\d+)\s*[:=]\s*\[(.*?)\]', caseSensitive: false);
+    final matches = regionRegex.allMatches(body);
+
+    for (final match in matches) {
+      int? id = int.tryParse(match.group(1) ?? '');
+      String? coordsStr = match.group(2);
+
+      if (id != null && coordsStr != null) {
+        final List<Point> coords = [];
+        final pointRegex = RegExp(r'\((\d+)\s*,\s*(\d+)\)');
+        final pointMatches = pointRegex.allMatches(coordsStr);
+
+        for (final pMatch in pointMatches) {
+          int? x = int.tryParse(pMatch.group(1) ?? '');
+          int? y = int.tryParse(pMatch.group(2) ?? '');
+          if (x != null && y != null) {
+            coords.add(Point(x, y));
+          }
+        }
+        result[id] = coords;
+      }
+    }
+
+    if (result.isEmpty) {
+      try {
+        final decoded = jsonDecode(body);
+        if (decoded is Map) {
+          decoded.forEach((key, value) {
+            final keyMatch = RegExp(r'Q(\d+)', caseSensitive: false).firstMatch(key.toString());
+            if (keyMatch != null && value is List) {
+              int? id = int.tryParse(keyMatch.group(1) ?? '');
+              if (id != null) {
+                final List<Point> coords = [];
+                for (var p in value) {
+                  if (p is List && p.length >= 2) {
+                    coords.add(Point(p[0], p[1]));
+                  }
+                }
+                result[id] = coords;
+              }
+            }
+          });
+        }
+      } catch (_) {}
+    }
+
+    return result;
   }
 }

@@ -82,7 +82,16 @@ class _CameraScreenState extends State<CameraScreen> {
           if (snapshot.connectionState == ConnectionState.done) {
             return Stack(
               children: [
-                Positioned.fill(child: CameraPreview(_controller)),
+                Positioned.fill(
+                  child: FittedBox(
+                    fit: BoxFit.cover,
+                    child: SizedBox(
+                      width: _controller.value.previewSize!.height,
+                      height: _controller.value.previewSize!.width,
+                      child: CameraPreview(_controller),
+                    ),
+                  ),
+                ),
 
                 _buildViewfinderOverlay(),
 
