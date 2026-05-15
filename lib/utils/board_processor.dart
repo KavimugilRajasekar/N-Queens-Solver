@@ -65,108 +65,95 @@ class BoardProcessor {
       img.Image? originalImage = img.decodeImage(bytes);
       
       if (originalImage != null) {
-        // Fix orientation based on EXIF
         img.Image fixedImage = img.bakeOrientation(originalImage);
-        
-        // Square crop to match viewfinder (Center of the image)
         int width = fixedImage.width;
         int height = fixedImage.height;
         int side = width < height ? width : height;
-        int xOffset = (width - side) ~/ 2;
-        int yOffset = (height - side) ~/ 2;
-
         img.Image squareImage = img.copyCrop(
           fixedImage, 
-          x: xOffset, 
-          y: yOffset, 
+          x: (width - side) ~/ 2, 
+          y: (height - side) ~/ 2, 
           width: side, 
           height: side
         );
-
-        // Optional: If the user reports a "left turn", we can rotate CW
-        // But bakeOrientation usually solves this. We'll stick to bakeOrientation + Crop.
-        
-        final processedBytes = img.encodeJpg(squareImage, quality: 90);
-        await File(imagePath).writeAsBytes(processedBytes);
-        debugPrint('Image orientation fixed and square-cropped.');
+        await File(imagePath).writeAsBytes(img.encodeJpg(squareImage, quality: 90));
       }
       
-      // 2. Create Multipart Request
+      // 2. Upload to API
       var request = http.MultipartRequest('POST', Uri.parse(_apiUrl));
-      String fileName = path.basename(imagePath);
-      
       request.files.add(await http.MultipartFile.fromPath(
         'file', 
         imagePath,
-        filename: fileName,
+        filename: path.basename(imagePath),
         contentType: MediaType('image', 'jpeg'),
       ));
 
-      debugPrint('Uploading square-cropped image to API...');
       var streamedResponse = await request.send().timeout(const Duration(seconds: 45));
       var response = await http.Response.fromStream(streamedResponse);
 
-      debugPrint('API Status Code: ${response.statusCode}');
+      debugPrint('API Status: ${response.statusCode}');
       debugPrint('API Raw Response: ${response.body}');
 
       if (response.statusCode != 200) {
         throw Exception('Server Error (${response.statusCode}):\n${response.body}');
       }
 
-      // 3. Parse Response
+      // 3. Parse and Dynamic Size Detection
       String responseBody = response.body;
       Map<int, List<Point>> regionMap = _parseApiResponse(responseBody);
 
       if (regionMap.isEmpty) {
-        throw Exception('API succeeded but returned no region data.\nResponse: $responseBody');
+        throw Exception('No region data extracted.\nResponse: $responseBody');
       }
 
-      // 4. Robust Indexing Detection
-      // Check the maximum coordinate value in the response
-      int maxCoord = 0;
+      // Determine dynamic board size N based on the number of regions (Qi)
+      // or the highest region ID found
+      int detectedN = 0;
+      regionMap.keys.forEach((id) {
+        if (id > detectedN) detectedN = id;
+      });
+      
+      if (detectedN == 0) detectedN = size; // Fallback to provided size
+      debugPrint('Dynamic Board Size Detected: $detectedN x $detectedN');
+
+      // Detect if 0-based or 1-based
+      bool hasZero = false;
       for (var coords in regionMap.values) {
         for (var pt in coords) {
-          if (pt.x > maxCoord) maxCoord = pt.x;
-          if (pt.y > maxCoord) maxCoord = pt.y;
+          if (pt.x == 0 || pt.y == 0) {
+            hasZero = true;
+            break;
+          }
         }
+        if (hasZero) break;
       }
-      
-      // If max coordinate is exactly 'size' (e.g. 8), it must be 1-based.
-      // If max coordinate is less than 'size' (e.g. 7), it's 0-based.
-      bool isZeroBased = maxCoord < size;
-      debugPrint('Max coordinate seen: $maxCoord. Detected: ${isZeroBased ? "0-based" : "1-based"}');
 
-      // 5. Construct BoardData
-      final grid = List.generate(size, (_) => List.filled(size, Colors.white));
+      // 4. Construct BoardData using the dynamic size
+      final grid = List.generate(detectedN, (_) => List.filled(detectedN, Colors.white));
       final regions = <int, BoardRegion>{};
 
       regionMap.forEach((id, coords) {
         Color color = _regionPalette[(id - 1) % _regionPalette.length];
-        
-        regions[id] = BoardRegion(
-          id: id,
-          color: color,
-          coordinates: coords,
-        );
+        regions[id] = BoardRegion(id: id, color: color, coordinates: coords);
 
         for (var pt in coords) {
-          int gridX = isZeroBased ? pt.x : pt.x - 1;
-          int gridY = isZeroBased ? pt.y : pt.y - 1;
+          int row = hasZero ? pt.x : pt.x - 1;
+          int col = hasZero ? pt.y : pt.y - 1;
 
-          if (gridX >= 0 && gridX < size && gridY >= 0 && gridY < size) {
-            grid[gridY][gridX] = color;
+          if (row >= 0 && row < detectedN && col >= 0 && col < detectedN) {
+            grid[row][col] = color;
           }
         }
       });
 
       return BoardData(
-        size: size,
+        size: detectedN,
         grid: grid,
         regions: regions,
         rawResponse: responseBody,
       );
     } catch (e) {
-      debugPrint('Fatal Error in BoardProcessor: $e');
+      debugPrint('Fatal Error: $e');
       rethrow;
     }
   }
@@ -186,10 +173,10 @@ class BoardProcessor {
         final pointMatches = pointRegex.allMatches(coordsStr);
 
         for (final pMatch in pointMatches) {
-          int? x = int.tryParse(pMatch.group(1) ?? '');
-          int? y = int.tryParse(pMatch.group(2) ?? '');
-          if (x != null && y != null) {
-            coords.add(Point(x, y));
+          int? v1 = int.tryParse(pMatch.group(1) ?? '');
+          int? v2 = int.tryParse(pMatch.group(2) ?? '');
+          if (v1 != null && v2 != null) {
+            coords.add(Point(v1, v2));
           }
         }
         result[id] = coords;
@@ -201,9 +188,9 @@ class BoardProcessor {
         final decoded = jsonDecode(body);
         if (decoded is Map) {
           decoded.forEach((key, value) {
-            final keyMatch = RegExp(r'Q(\d+)', caseSensitive: false).firstMatch(key.toString());
-            if (keyMatch != null && value is List) {
-              int? id = int.tryParse(keyMatch.group(1) ?? '');
+            final idMatch = RegExp(r'Q(\d+)', caseSensitive: false).firstMatch(key.toString());
+            if (idMatch != null && value is List) {
+              int? id = int.tryParse(idMatch.group(1) ?? '');
               if (id != null) {
                 final List<Point> coords = [];
                 for (var p in value) {
@@ -218,7 +205,6 @@ class BoardProcessor {
         }
       } catch (_) {}
     }
-
     return result;
   }
 }
