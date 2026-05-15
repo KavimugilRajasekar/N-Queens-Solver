@@ -39,42 +39,128 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
   }
 
   void _showAddOptions() {
+    bool showScanSubOptions = false;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => Container(
+          padding: const EdgeInsets.all(24),
+          decoration: const BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 30),
+              // Dynamic Scanning Option
+              AnimatedCrossFade(
+                duration: const Duration(milliseconds: 300),
+                crossFadeState: showScanSubOptions ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                firstChild: _buildOptionCard(
+                  icon: Icons.camera_alt_rounded,
+                  title: 'Start Scanning',
+                  subtitle: 'Digitize a physical board',
+                  onTap: () => setSheetState(() => showScanSubOptions = true),
+                ),
+                secondChild: Transform.rotate(
+                  angle: -0.01,
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.navyBlue.withOpacity(0.1), width: 2),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: const BoxDecoration(color: AppColors.gold, shape: BoxShape.circle),
+                          child: const Icon(Icons.camera_alt_rounded, color: AppColors.navyBlue, size: 24),
+                        ),
+                        const SizedBox(width: 16),
+                        const Text('Scanning', style: TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.navyBlue)),
+                        const Spacer(),
+                        _buildMiniSubOption(
+                          icon: Icons.qr_code_scanner_rounded,
+                          label: 'QR',
+                          angle: 0.08,
+                          onTap: () {
+                            // TODO: Implement QR later
+                          },
+                        ),
+                        const SizedBox(width: 16),
+                        _buildMiniSubOption(
+                          icon: Icons.photo_camera_rounded,
+                          label: 'Camera',
+                          angle: -0.05,
+                          onTap: () async {
+                            Navigator.pop(context);
+                            await Navigator.push(context, MaterialPageRoute(builder: (context) => CameraScreen(camera: widget.cameras.first)));
+                            _refreshBoards();
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildOptionCard(
+                icon: Icons.create_rounded,
+                title: 'Create Board',
+                subtitle: 'Build a custom NxN puzzle',
+                onTap: () async {
+                  Navigator.pop(context);
+                  await Navigator.push(context, MaterialPageRoute(builder: (context) => CreateBoardScreen(cameras: widget.cameras)));
+                  _refreshBoards();
+                },
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildMiniSubOption({required IconData icon, required String label, required VoidCallback onTap, double angle = 0.0}) {
+    return Transform.rotate(
+      angle: angle,
+      child: GestureDetector(
+        onTap: onTap,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 30),
-            _buildOptionCard(
-              icon: Icons.camera_alt_rounded,
-              title: 'Start Scanning',
-              subtitle: 'Digitize a physical board',
-              onTap: () async {
-                Navigator.pop(context);
-                await Navigator.push(context, MaterialPageRoute(builder: (context) => CameraScreen(camera: widget.cameras.first)));
-                _refreshBoards();
-              },
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.navyBlue, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.navyBlue.withOpacity(0.2),
+                    offset: const Offset(4, 4),
+                    blurRadius: 0,
+                  )
+                ],
+              ),
+              child: Icon(icon, color: AppColors.navyBlue, size: 28),
             ),
-            const SizedBox(height: 16),
-            _buildOptionCard(
-              icon: Icons.create_rounded,
-              title: 'Create Board',
-              subtitle: 'Build a custom NxN puzzle',
-              onTap: () async {
-                Navigator.pop(context);
-                await Navigator.push(context, MaterialPageRoute(builder: (context) => CreateBoardScreen(cameras: widget.cameras)));
-                _refreshBoards();
-              },
+            const SizedBox(height: 6),
+            Text(
+              label, 
+              style: const TextStyle(
+                fontFamily: 'DynaPuff', 
+                fontSize: 12, 
+                fontWeight: FontWeight.bold, 
+                color: AppColors.navyBlue
+              )
             ),
-            const SizedBox(height: 20),
           ],
         ),
       ),
@@ -127,7 +213,36 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
               children: [
                 Padding(
                   padding: const EdgeInsets.all(24.0),
-                  child: Text('Board Library', style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 32)),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Board Library', style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 32)),
+                      Transform.rotate(
+                        angle: 0.1,
+                        child: GestureDetector(
+                          onTap: () {
+                            // TODO: Implement Export logic
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: AppColors.navyBlue, width: 2),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.navyBlue.withOpacity(0.3),
+                                  offset: const Offset(3, 3),
+                                  blurRadius: 0,
+                                )
+                              ],
+                            ),
+                            child: const Icon(Icons.ios_share_rounded, color: AppColors.navyBlue, size: 20),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 Expanded(
                   child: _isLoading 
