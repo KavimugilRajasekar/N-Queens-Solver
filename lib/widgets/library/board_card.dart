@@ -37,10 +37,18 @@ class LibraryBoardCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: board.isManuallySolved ? const Color(0xFFFFFDE7) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.navyBlue.withOpacity(0.2), width: 1.5),
-        boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.05), offset: const Offset(4, 4))],
+        border: Border.all(
+          color: board.isManuallySolved ? AppColors.gold.withOpacity(0.5) : AppColors.navyBlue.withOpacity(0.2), 
+          width: board.isManuallySolved ? 2 : 1.5
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: board.isManuallySolved ? AppColors.gold.withOpacity(0.1) : AppColors.navyBlue.withOpacity(0.05), 
+            offset: const Offset(4, 4)
+          )
+        ],
       ),
       child: Stack(
         children: [
