@@ -227,24 +227,38 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
         children: [
           Positioned.fill(child: CustomPaint(painter: NotebookPainter())),
           SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildHeader(),
-                  const SizedBox(height: 30),
-                  if (_isEditing) _buildPalette(),
-                  const SizedBox(height: 20),
-                  _buildMainBoard(boardScale),
-                  const SizedBox(height: 30),
-                  _buildActionButtons(),
-                  const SizedBox(height: 30),
-                  if (!_isEditing && _solverSteps.isNotEmpty) _buildAlgorithmFlow(),
-                  const SizedBox(height: 30),
-                  if (!_isEditing) _buildLibraryButtons(),
-                  const SizedBox(height: 40),
-                ],
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.0, end: 1.0),
+              duration: const Duration(milliseconds: 800),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, child) {
+                return Opacity(
+                  opacity: value,
+                  child: Transform.translate(
+                    offset: Offset(0, 30 * (1 - value)),
+                    child: child,
+                  ),
+                );
+              },
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHeader(),
+                    const SizedBox(height: 30),
+                    if (_isEditing) _buildPalette(),
+                    const SizedBox(height: 20),
+                    _buildMainBoard(boardScale),
+                    const SizedBox(height: 30),
+                    _buildActionButtons(),
+                    const SizedBox(height: 30),
+                    if (!_isEditing && _solverSteps.isNotEmpty) _buildAlgorithmFlow(),
+                    const SizedBox(height: 30),
+                    if (!_isEditing) _buildLibraryButtons(),
+                    const SizedBox(height: 40),
+                  ],
+                ),
               ),
             ),
           ),

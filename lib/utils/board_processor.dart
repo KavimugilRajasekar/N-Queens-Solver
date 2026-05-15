@@ -48,30 +48,30 @@ class BoardProcessor {
     return RegionColors.getRegionColor(id, n);
   }
 
+  static Future<void> cropImage(String imagePath) async {
+    final bytes = await File(imagePath).readAsBytes();
+    img.Image? originalImage = img.decodeImage(bytes);
+    
+    if (originalImage != null) {
+      img.Image fixedImage = img.bakeOrientation(originalImage);
+      int width = fixedImage.width;
+      int height = fixedImage.height;
+      int side = width < height ? width : height;
+      img.Image squareImage = img.copyCrop(
+        fixedImage, 
+        x: (width - side) ~/ 2, 
+        y: (height - side) ~/ 2, 
+        width: side, 
+        height: side
+      );
+      await File(imagePath).writeAsBytes(img.encodeJpg(squareImage, quality: 90));
+    }
+  }
+
   static Future<BoardData> processImage(String imagePath, int size) async {
     try {
-      debugPrint('Processing image for upload: $imagePath');
-
-      // 1. Image Preprocessing (Orientation + Square Crop)
-      final bytes = await File(imagePath).readAsBytes();
-      img.Image? originalImage = img.decodeImage(bytes);
+      debugPrint('Uploading image: $imagePath');
       
-      if (originalImage != null) {
-        img.Image fixedImage = img.bakeOrientation(originalImage);
-        int width = fixedImage.width;
-        int height = fixedImage.height;
-        int side = width < height ? width : height;
-        img.Image squareImage = img.copyCrop(
-          fixedImage, 
-          x: (width - side) ~/ 2, 
-          y: (height - side) ~/ 2, 
-          width: side, 
-          height: side
-        );
-        await File(imagePath).writeAsBytes(img.encodeJpg(squareImage, quality: 90));
-      }
-      
-      // 2. Upload to API
       var request = http.MultipartRequest('POST', Uri.parse(_apiUrl));
       request.files.add(await http.MultipartFile.fromPath(
         'file', 

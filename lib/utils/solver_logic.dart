@@ -182,16 +182,31 @@ class NQueensSolver {
 
     int removedCount = 0;
     final Map<int, List<Point>> removedFromRegions = {};
+    
+    // 1. Clear the rest of the CURRENT region (as it's now satisfied)
+    final currentRegionPoints = _regionCells[regionId]!;
+    final restOfCurrent = currentRegionPoints.where((p) => p.x - 1 != r || p.y - 1 != c).toList();
+    if (restOfCurrent.isNotEmpty) {
+      removedFromRegions[regionId] = restOfCurrent;
+      for (var p in restOfCurrent) currentRegionPoints.remove(p);
+    }
+
+    // 2. Remove invalid cells from OTHER regions
     _regionCells.forEach((id, cells) {
       if (id == regionId) return;
       final toRemove = cells.where((p) {
         int pr = p.x - 1;
         int pc = p.y - 1;
+        // Standard N-Queens + Star Battle constraints
         return pr == r || pc == c || (pr - r).abs() <= 1 && (pc - c).abs() <= 1;
       }).toList();
       if (toRemove.isNotEmpty) {
         removedCount += toRemove.length;
-        removedFromRegions[id] = toRemove;
+        if (removedFromRegions.containsKey(id)) {
+          removedFromRegions[id]!.addAll(toRemove);
+        } else {
+          removedFromRegions[id] = toRemove;
+        }
         for (var p in toRemove) cells.remove(p);
       }
     });
