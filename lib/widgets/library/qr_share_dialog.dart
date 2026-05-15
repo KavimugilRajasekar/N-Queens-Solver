@@ -32,14 +32,14 @@ class _QRShareDialogState extends State<QRShareDialog> {
       // Small delay to ensure UI is settled
       await Future.delayed(const Duration(milliseconds: 100));
       final image = await _screenshotController.capture(
-        pixelRatio: 2.0, // High quality
+        pixelRatio: 3.0, // Ultra high quality for sharing
       );
       if (image != null) {
         final directory = await getTemporaryDirectory();
         final imagePath = await File('${directory.path}/n_queens_share.png').create();
         await imagePath.writeAsBytes(image);
 
-        await Share.shareXFiles([XFile(imagePath.path)], text: 'Check out these N-Queens boards!');
+        await Share.shareXFiles([XFile(imagePath.path)], text: '🧩 Try these N-Queens boards in the N-Queens Solver app!');
       }
     } catch (e) {
       if (mounted) {
@@ -56,71 +56,136 @@ class _QRShareDialogState extends State<QRShareDialog> {
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16),
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Main Tilted Card
+          // Main Tilted Dialog Container
           Transform.rotate(
-            angle: -0.02,
+            angle: -0.015,
             child: Container(
-              width: 340,
-              padding: const EdgeInsets.all(24),
+              width: 380,
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(30),
+                borderRadius: BorderRadius.circular(35),
                 border: Border.all(color: AppColors.navyBlue, width: 3),
                 boxShadow: [
-                  BoxShadow(
-                    color: AppColors.navyBlue.withOpacity(0.2),
-                    offset: const Offset(8, 8),
-                  )
+                  BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(10, 10))
                 ],
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Scan to Share', style: TextStyle(fontFamily: 'DynaPuff', color: AppColors.navyBlue, fontSize: 24, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 20),
+                  // Title Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.gold.withOpacity(0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.qr_code_2_rounded, color: AppColors.navyBlue, size: 28),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text('Export Boards', style: TextStyle(fontFamily: 'DynaPuff', color: AppColors.navyBlue, fontSize: 22, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
                   
-                  // QR Area with Screenshot Controller
+                  // This is the part that gets screenshotted for sharing
                   Screenshot(
                     controller: _screenshotController,
                     child: Container(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppColors.navyBlue.withOpacity(0.1), width: 2),
+                        borderRadius: BorderRadius.circular(25),
+                        border: Border.all(color: AppColors.navyBlue.withOpacity(0.15), width: 1.5),
                       ),
-                      child: PrettyQrView.data(
-                        data: widget.qrData,
-                        decoration: const PrettyQrDecoration(
-                          shape: PrettyQrSmoothSymbol(
-                            color: AppColors.navyBlue,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Top Logo Row (For shared image)
+                          Row(
+                            children: [
+                              Image.asset('assets/icons/n_queen_logo.png', width: 40, height: 40),
+                              const SizedBox(width: 12),
+                              const Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('N-Queens Solver', style: TextStyle(fontFamily: 'DynaPuff', fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
+                                  Text('Interactive Puzzle Studio', style: TextStyle(fontFamily: 'Comfortaa', fontSize: 10, color: AppColors.secondaryText)),
+                                ],
+                              ),
+                            ],
                           ),
-                        ),
+                          const SizedBox(height: 20),
+                          
+                          // QR and Info Row
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              // The QR Code
+                              Expanded(
+                                flex: 3,
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: AppColors.navyBlue.withOpacity(0.1), width: 1),
+                                    borderRadius: BorderRadius.circular(15),
+                                  ),
+                                  child: PrettyQrView.data(
+                                    data: widget.qrData,
+                                    decoration: const PrettyQrDecoration(
+                                      shape: PrettyQrSmoothSymbol(color: AppColors.navyBlue),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 20),
+                              // Info Text on the Right
+                              const Expanded(
+                                flex: 2,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('SCAN ME', style: TextStyle(fontFamily: 'DynaPuff', fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.gold)),
+                                    SizedBox(height: 8),
+                                    Text('1. Open App\n2. Library\n3. Scan QR', style: TextStyle(fontFamily: 'Comfortaa', fontSize: 11, color: AppColors.navyBlue, height: 1.5)),
+                                    SizedBox(height: 12),
+                                    Text('Solvable Boards', style: TextStyle(fontFamily: 'Comfortaa', fontSize: 9, fontWeight: FontWeight.bold, color: Colors.green)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          const Text('Puzzle shared via N-Queens Studio', style: TextStyle(fontFamily: 'Comfortaa', fontSize: 9, fontStyle: FontStyle.italic, color: Colors.grey)),
+                        ],
                       ),
                     ),
                   ),
                   
-                  const SizedBox(height: 20),
-                  const Text('Share these solvable boards!', style: TextStyle(fontFamily: 'Comfortaa', fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),
-                  const Text('Only board regions are shared, not solutions.', style: TextStyle(fontFamily: 'Comfortaa', fontSize: 11, color: AppColors.secondaryText)),
                   const SizedBox(height: 30),
                   
+                  // Action Buttons
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       _buildFunkyButton(
-                        label: 'Close',
-                        color: Colors.grey.shade200,
+                        label: 'Cancel',
+                        color: Colors.white,
                         onTap: () => Navigator.pop(context),
+                        rotation: -0.04,
                       ),
                       _buildFunkyButton(
-                        label: _isSharing ? 'Sharing...' : 'Share Image',
+                        label: _isSharing ? 'Capturing...' : 'Share Sticker',
                         color: AppColors.gold,
                         onTap: _isSharing ? null : _shareQR,
+                        rotation: 0.03,
                       ),
                     ],
                   ),
@@ -133,27 +198,24 @@ class _QRShareDialogState extends State<QRShareDialog> {
     );
   }
 
-  Widget _buildFunkyButton({required String label, required Color color, required VoidCallback? onTap, double rotation = 0.03}) {
+  Widget _buildFunkyButton({required String label, required Color color, required VoidCallback? onTap, required double rotation}) {
     return Transform.rotate(
       angle: rotation,
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           decoration: BoxDecoration(
             color: color,
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: AppColors.navyBlue, width: 2),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.navyBlue, width: 2.5),
             boxShadow: [
-              BoxShadow(
-                color: AppColors.navyBlue.withOpacity(0.2),
-                offset: const Offset(4, 4),
-              )
+              BoxShadow(color: AppColors.navyBlue.withOpacity(0.3), offset: const Offset(4, 4))
             ],
           ),
           child: Text(
             label,
-            style: const TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.navyBlue),
+            style: const TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.navyBlue),
           ),
         ),
       ),
