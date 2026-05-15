@@ -31,6 +31,7 @@ class BoardData {
   final Map<int, BoardRegion> regions;
   final String rawResponse;
   Map<int, Point>? solution;
+  bool isManuallySolved;
 
   BoardData({
     required this.size,
@@ -38,6 +39,7 @@ class BoardData {
     required this.regions,
     required this.rawResponse,
     this.solution,
+    this.isManuallySolved = false,
   });
 }
 

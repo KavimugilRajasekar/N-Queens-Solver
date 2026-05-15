@@ -38,6 +38,7 @@ class StorageManager {
       )),
       'rawResponse': board.rawResponse,
       'solution': board.solution?.map((id, p) => MapEntry(id.toString(), {'x': p.x, 'y': p.y})),
+      'isManuallySolved': board.isManuallySolved,
       'date': DateTime.now().toIso8601String(),
     };
 
@@ -80,6 +81,7 @@ class StorageManager {
           regions: regions,
           rawResponse: item['rawResponse'] ?? '',
           solution: solution.isEmpty ? null : solution,
+          isManuallySolved: item['isManuallySolved'] ?? false,
         ),
       };
     }).toList();
@@ -128,6 +130,7 @@ class StorageManager {
         }
       ));
       saved[index]['solution'] = board.solution?.map((id, p) => MapEntry(id.toString(), {'x': p.x, 'y': p.y}));
+      saved[index]['isManuallySolved'] = board.isManuallySolved;
       saved[index]['date'] = DateTime.now().toIso8601String();
       await file.writeAsString(jsonEncode(saved));
     }

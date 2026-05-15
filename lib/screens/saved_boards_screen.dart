@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:lottie/lottie.dart';
 import '../constants/colors.dart';
 import '../utils/board_processor.dart';
 import '../constants/region_colors.dart';
@@ -217,6 +218,20 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
               _refreshBoards();
             },
           ),
+          // Victory Badge
+          if (board.isManuallySolved)
+            Positioned(
+              top: 2,
+              left: 2,
+              child: SizedBox(
+                width: 42,
+                height: 42,
+                child: Lottie.asset(
+                  'assets/json/winner_badge.json',
+                  repeat: true,
+                ),
+              ),
+            ),
           // Action Buttons at Bottom Right
           Positioned(
             bottom: 4,
