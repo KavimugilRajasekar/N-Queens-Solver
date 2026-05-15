@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../constants/region_colors.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:path/path.dart' as path;
 import 'package:image/image.dart' as img;
@@ -41,23 +42,8 @@ class BoardData {
 class BoardProcessor {
   static const String _apiUrl = 'https://image-processor-livid.vercel.app/process-image';
 
-  static const List<Color> regionPalette = [
-    Color(0xFFFFB3B3), // Red 200
-    Color(0xFFB3D9FF), // Blue 200
-    Color(0xFFB3FFB3), // Green 200
-    Color(0xFFFFD9B3), // Orange 200
-    Color(0xFFE6B3FF), // Purple 200
-    Color(0xFFB3FFFF), // Cyan 200
-    Color(0xFFFFB3E6), // Pink 200
-    Color(0xFFB3B3FF), // Indigo 200
-    Color(0xFFFFE6B3), // Amber 200
-    Color(0xFFB3FFE6), // Teal 200
-    Color(0xFFE6FFB3), // Lime 200
-    Color(0xFFD9B38C), // Brown 200
-  ];
-
-  static Color getRegionColor(int id) {
-    return regionPalette[(id - 1) % regionPalette.length];
+  static Color getRegionColor(int id, int n) {
+    return RegionColors.getRegionColor(id, n);
   }
 
   static Future<BoardData> processImage(String imagePath, int size) async {
@@ -139,7 +125,7 @@ class BoardProcessor {
         final coords = regionMap[originalId]!;
         int id = normalizedId++; // We assign sequential IDs starting from 1
         
-        Color color = getRegionColor(id);
+        Color color = getRegionColor(id, detectedN);
         regions[id] = BoardRegion(id: id, color: color, coordinates: coords);
 
         for (var pt in coords) {

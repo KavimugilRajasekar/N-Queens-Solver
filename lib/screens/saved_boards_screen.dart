@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import '../constants/colors.dart';
 import '../utils/board_processor.dart';
+import '../constants/region_colors.dart';
 import '../utils/storage_manager.dart';
 import '../widgets/notebook_painter.dart';
 import 'camera_screen.dart';
@@ -194,7 +195,13 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
                     int r = i ~/ board.size;
                     int c = i % board.size;
                     int id = board.regionIds[r][c];
-                    return Container(color: id == 0 ? Colors.white : BoardProcessor.getRegionColor(id));
+                    bool isInvalid = id > board.size;
+                    return Container(
+                      color: RegionColors.getRegionColor(id, board.size),
+                      child: isInvalid 
+                        ? const Center(child: Icon(Icons.close_rounded, size: 8, color: Colors.black26)) 
+                        : null,
+                    );
                   },
                 ),
               ),

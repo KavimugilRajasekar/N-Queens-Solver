@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../constants/colors.dart';
 import '../utils/board_processor.dart';
+import '../constants/region_colors.dart';
 import '../utils/solver_logic.dart';
 import '../utils/storage_manager.dart';
 import '../widgets/notebook_painter.dart';
@@ -53,6 +54,28 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
 
   Future<void> _startSolving() async {
     if (_isSolving || _isEditing) return;
+
+    // Check for invalid regions (ID > N)
+    bool hasInvalidRegions = false;
+    for (int r = 0; r < widget.boardData.size; r++) {
+      for (int c = 0; c < widget.boardData.size; c++) {
+        if (widget.boardData.regionIds[r][c] > widget.boardData.size) {
+          hasInvalidRegions = true;
+          break;
+        }
+      }
+    }
+
+    if (hasInvalidRegions) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Board has invalid regions! Please edit highlighted cells before solving.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isSolving = true;
       _isFastForward = false;
@@ -122,7 +145,7 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
         if (idToPoints.containsKey(id)) {
           newRegions[id] = BoardRegion(
             id: id, 
-            color: BoardProcessor.getRegionColor(id), 
+            color: RegionColors.getRegionColor(id, widget.boardData.size), 
             coordinates: idToPoints[id]!
           );
         }
@@ -249,7 +272,7 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
 
   Widget _buildPaletteItem(int id) {
     bool isSelected = _selectedRegionId == id;
-    Color color = BoardProcessor.getRegionColor(id);
+    Color color = RegionColors.getRegionColor(id, widget.boardData.size);
     return GestureDetector(
       onTap: () => setState(() => _selectedRegionId = id),
       child: AnimatedContainer(
@@ -287,16 +310,30 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
                 int r = index ~/ widget.boardData.size;
                 int c = index % widget.boardData.size;
                 bool hasQueen = _queenPositions.values.any((p) => p.x - 1 == r && p.y - 1 == c);
+                int id = _isEditing ? _tempGrid![r][c] : widget.boardData.regionIds[r][c];
+                bool isInvalid = id > widget.boardData.size;
+
                 return GestureDetector(
                   onTap: () => _handleCellTap(r, c),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: _isEditing 
-                          ? BoardProcessor.getRegionColor(_tempGrid![r][c]) 
-                          : BoardProcessor.getRegionColor(widget.boardData.regionIds[r][c]), 
+                      color: RegionColors.getRegionColor(id, widget.boardData.size), 
                       border: Border.all(color: Colors.black.withOpacity(0.05), width: 0.5)
                     ),
-                    child: hasQueen ? Center(child: Icon(Icons.stars_rounded, color: AppColors.navyBlue, size: (MediaQuery.of(context).size.width * boardScale * 0.8) / widget.boardData.size)) : null,
+                    child: hasQueen 
+                      ? Center(child: Icon(Icons.stars_rounded, color: AppColors.navyBlue, size: (MediaQuery.of(context).size.width * boardScale * 0.8) / widget.boardData.size)) 
+                      : isInvalid 
+                        ? Center(
+                            child: Transform.rotate(
+                              angle: 0.1,
+                              child: Icon(
+                                Icons.close_rounded, 
+                                color: AppColors.navyBlue.withOpacity(0.3), 
+                                size: (MediaQuery.of(context).size.width * boardScale * 0.6) / widget.boardData.size
+                              ),
+                            ),
+                          )
+                        : null,
                   ),
                 );
               },
@@ -308,40 +345,96 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
   }
 
   Widget _buildActionButtons() {
-    return Row(
+    bool hasConflicts = false;
+    for (int r = 0; r < widget.boardData.size; r++) {
+      for (int c = 0; c < widget.boardData.size; c++) {
+        if (widget.boardData.regionIds[r][c] > widget.boardData.size) {
+          hasConflicts = true;
+          break;
+        }
+      }
+    }
+
+    bool canSolve = !hasConflicts && !_isSolving && !_isEditing;
+
+    return Column(
       children: [
-        Expanded(
-          child: Transform.rotate(
-            angle: 0.02,
-            child: Container(
-              height: 60,
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: AppColors.navyBlue, width: 2), boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.15), offset: const Offset(4, 4))]),
-              child: ElevatedButton.icon(
-                onPressed: _isSolving ? null : _toggleEditMode,
-                icon: Icon(_isEditing ? Icons.close_rounded : Icons.edit_note_rounded, color: _isEditing ? Colors.red : AppColors.navyBlue),
-                label: Text(_isEditing ? 'Cancel' : 'Edit', style: TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 18, color: _isEditing ? Colors.red : AppColors.navyBlue)),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, elevation: 0),
+        Row(
+          children: [
+            Expanded(
+              child: Transform.rotate(
+                angle: 0.02,
+                child: Container(
+                  height: 60,
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: AppColors.navyBlue, width: 2), boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.15), offset: const Offset(4, 4))]),
+                  child: ElevatedButton.icon(
+                    onPressed: _isSolving ? null : _toggleEditMode,
+                    icon: Icon(_isEditing ? Icons.close_rounded : Icons.edit_note_rounded, color: _isEditing ? Colors.red : AppColors.navyBlue),
+                    label: Text(_isEditing ? 'Cancel' : 'Edit', style: TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 18, color: _isEditing ? Colors.red : AppColors.navyBlue)),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, elevation: 0),
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Transform.rotate(
-            angle: -0.01,
-            child: Container(
-              height: 60,
-              decoration: BoxDecoration(color: _isSolving ? Colors.grey.shade300 : AppColors.gold, borderRadius: BorderRadius.circular(15), border: Border.all(color: AppColors.navyBlue, width: 2), boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(4, 4))]),
-              child: ElevatedButton.icon(
-                onPressed: _isSolving ? null : (_isEditing ? _saveEdits : _startSolving),
-                icon: _isSolving ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.navyBlue)) : Icon(_isEditing ? Icons.check_circle_rounded : Icons.auto_fix_high_rounded, color: AppColors.navyBlue),
-                label: Text(_isSolving ? 'Solving...' : (_isEditing ? 'Save' : 'Solve'), style: const TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.navyBlue)),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, elevation: 0),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Transform.rotate(
+                angle: -0.01,
+                child: Container(
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: _isSolving 
+                        ? Colors.grey.shade300 
+                        : (hasConflicts ? Colors.grey.shade200 : AppColors.gold), 
+                    borderRadius: BorderRadius.circular(15), 
+                    border: Border.all(color: AppColors.navyBlue.withOpacity(hasConflicts ? 0.3 : 1.0), width: 2), 
+                    boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(hasConflicts ? 0.05 : 0.2), offset: const Offset(4, 4))]
+                  ),
+                  child: ElevatedButton.icon(
+                    onPressed: canSolve ? _startSolving : (_isEditing ? _saveEdits : null),
+                    icon: _isSolving 
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.navyBlue)) 
+                        : Icon(_isEditing ? Icons.check_circle_rounded : Icons.auto_fix_high_rounded, color: AppColors.navyBlue.withOpacity(hasConflicts && !_isEditing ? 0.4 : 1.0)),
+                    label: Text(_isSolving ? 'Solving...' : (_isEditing ? 'Save' : 'Solve'), style: TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.navyBlue.withOpacity(hasConflicts && !_isEditing ? 0.4 : 1.0))),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, elevation: 0),
+                  ),
+                ),
               ),
             ),
-          ),
+          ],
         ),
+        if (hasConflicts && !_isEditing) ...[
+          const SizedBox(height: 24),
+          _buildFunkyConflictPrompt(),
+        ],
       ],
+    );
+  }
+
+  Widget _buildFunkyConflictPrompt() {
+    return Transform.rotate(
+      angle: -0.01,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF9C4), // Soft Lemon Yellow
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: AppColors.gold, width: 2),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), offset: const Offset(4, 4))],
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.auto_fix_high_rounded, color: AppColors.navyBlue),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                "Whoops! Some regions are messy. Tap 'Edit' to fix the Funky-X marks!",
+                style: TextStyle(fontFamily: 'DynaPuff', fontSize: 14, color: AppColors.navyBlue, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -396,7 +489,7 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
                         break;
                       }
                     }
-                    Color cellColor = BoardProcessor.getRegionColor(widget.boardData.regionIds[r][c]);
+                    Color cellColor = RegionColors.getRegionColor(widget.boardData.regionIds[r][c], widget.boardData.size);
                     return Container(
                       decoration: BoxDecoration(
                         color: isValidDomain ? cellColor : cellColor.withOpacity(0.15), 

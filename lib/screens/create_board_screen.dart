@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import '../constants/colors.dart';
 import '../utils/board_processor.dart';
+import '../constants/region_colors.dart';
 import '../utils/storage_manager.dart';
 import '../widgets/notebook_painter.dart';
 import 'n_queens_board.dart';
@@ -49,7 +50,7 @@ class _CreateBoardScreenState extends State<CreateBoardScreen> {
     for (int r = 0; r < _size; r++) {
       for (int c = 0; c < _size; c++) {
         final id = _grid![r][c];
-        final color = BoardProcessor.getRegionColor(id);
+        final color = RegionColors.getRegionColor(id, _size);
         regions.putIfAbsent(id, () => BoardRegion(id: id, color: color, coordinates: [])).coordinates.add(Point(r + 1, c + 1));
       }
     }
@@ -203,7 +204,7 @@ class _CreateBoardScreenState extends State<CreateBoardScreen> {
                       int r = index ~/ _size;
                       int c = index % _size;
                       int id = _grid![r][c];
-                      Color color = id == 0 ? Colors.white : BoardProcessor.getRegionColor(id);
+                      Color color = RegionColors.getRegionColor(id, _size);
                       return GestureDetector(
                         onTap: () => _handleCellTap(r, c),
                         child: Container(
@@ -259,7 +260,7 @@ class _CreateBoardScreenState extends State<CreateBoardScreen> {
 
   Widget _buildPaletteItem(int id) {
     bool isSelected = _selectedRegionId == id;
-    Color color = BoardProcessor.getRegionColor(id);
+    Color color = RegionColors.getRegionColor(id, _size);
     return GestureDetector(
       onTap: () => setState(() => _selectedRegionId = id),
       child: AnimatedContainer(
