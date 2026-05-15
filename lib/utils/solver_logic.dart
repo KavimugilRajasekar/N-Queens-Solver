@@ -39,7 +39,7 @@ class NQueensSolver {
     yield SolverStep(
       queenPositions: {},
       domains: _cloneDomains(),
-      message: "🚀 Initializing board. Every region has its full domain available.",
+      message: "Initializing board. Every region has its full domain available.",
     );
 
     bool solved = false;
@@ -54,13 +54,13 @@ class NQueensSolver {
       yield SolverStep(
         queenPositions: Map.from(_solution),
         domains: _cloneDomains(),
-        message: "✅ SUCCESS: All regions satisfied!",
+        message: "SUCCESS: All regions satisfied!",
       );
     } else {
       yield SolverStep(
         queenPositions: {},
         domains: _cloneDomains(),
-        message: "❌ FAILURE: Domain emptied. No solution possible.",
+        message: "FAILURE: Domain emptied. No solution possible.",
         isBacktrack: true,
       );
     }
@@ -79,7 +79,7 @@ class NQueensSolver {
     yield SolverStep(
       queenPositions: Map.from(_solution),
       domains: _cloneDomains(),
-      message: "🔍 Selected Region $currentRegionId (Most constrained: $candidateCount cells left).",
+      message: "Selected Region $currentRegionId (Most constrained: $candidateCount cells left).",
     );
 
     final candidateCells = List<Point>.from(_regionCells[currentRegionId]!);
@@ -103,14 +103,14 @@ class NQueensSolver {
       String confinementMsg = "";
       _regionCells.forEach((id, cells) {
         if (!_solution.containsKey(id) && cells.length == 1) {
-          confinementMsg = " ⚠️ Region $id is now confined to 1 cell!";
+          confinementMsg = "Region $id is now confined to 1 cell!";
         }
       });
 
       yield SolverStep(
         queenPositions: Map.from(_solution),
         domains: _cloneDomains(),
-        message: "📍 Placed Queen $currentRegionId at (${cell.x}, ${cell.y}). Reduced $totalRemoved cells from other regions.$confinementMsg",
+        message: "Placed Queen $currentRegionId at (${cell.x}, ${cell.y}). Reduced $totalRemoved cells from other regions.$confinementMsg",
       );
 
       // Recursive Call
@@ -132,7 +132,7 @@ class NQueensSolver {
       yield SolverStep(
         queenPositions: Map.from(_solution),
         domains: _cloneDomains(),
-        message: "🔙 Backtracking from Region $currentRegionId (${cell.x}, ${cell.y}). Restoring $totalRemoved cells.",
+        message: "Backtracking from Region $currentRegionId (${cell.x}, ${cell.y}). Restoring $totalRemoved cells.",
         isBacktrack: true,
       );
     }
