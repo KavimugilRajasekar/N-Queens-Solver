@@ -14,11 +14,14 @@ class LibraryBoardCard extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onRefresh;
 
+  final int? selectionIndex;
+
   const LibraryBoardCard({
     super.key,
     required this.data,
     required this.isSelectionMode,
     required this.isSelected,
+    this.selectionIndex,
     required this.onToggleSelection,
     required this.onRename,
     required this.onDelete,
@@ -28,7 +31,8 @@ class LibraryBoardCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final BoardData board = data['board'];
-    final bool isSolvable = board.solution != null;
+    // A board is solvable if it has a solution OR if it was manually solved
+    final bool isSolvable = board.solution != null || board.isManuallySolved;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -76,14 +80,22 @@ class LibraryBoardCard extends StatelessWidget {
               top: 12,
               right: 12,
               child: Container(
-                width: 24,
-                height: 24,
+                width: 26,
+                height: 26,
                 decoration: BoxDecoration(
                   color: isSelected ? AppColors.navyBlue : Colors.white,
                   shape: BoxShape.circle,
                   border: Border.all(color: AppColors.navyBlue, width: 2),
+                  boxShadow: isSelected ? [BoxShadow(color: AppColors.navyBlue.withOpacity(0.3), blurRadius: 4, offset: const Offset(2, 2))] : null,
                 ),
-                child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 16) : null,
+                child: Center(
+                  child: isSelected 
+                    ? Text(
+                        selectionIndex != null ? (selectionIndex! + 1).toString() : '', 
+                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold, fontFamily: 'DynaPuff')
+                      )
+                    : null,
+                ),
               ),
             ),
 

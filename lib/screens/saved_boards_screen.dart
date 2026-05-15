@@ -34,7 +34,7 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
   List<Map<String, dynamic>> _savedBoards = [];
   bool _isLoading = true;
   bool _isSelectionMode = false;
-  final Set<int> _selectedIds = {};
+  final List<int> _selectedIds = [];
 
   @override
   void initState() {
@@ -286,19 +286,25 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
                           itemCount: _savedBoards.length,
                           itemBuilder: (context, index) {
                             final data = _savedBoards[index];
+                            final selectionIndex = _selectedIds.indexOf(data['id']);
                             return LibraryBoardCard(
                               data: data,
                               isSelectionMode: _isSelectionMode,
-                              isSelected: _selectedIds.contains(data['id']),
-                              onToggleSelection: () {
-                                setState(() {
-                                  if (_selectedIds.contains(data['id'])) {
-                                    _selectedIds.remove(data['id']);
-                                  } else {
-                                    _selectedIds.add(data['id']);
-                                  }
-                                });
-                              },
+                               isSelected: selectionIndex != -1,
+                               selectionIndex: selectionIndex != -1 ? selectionIndex : null,
+                               onToggleSelection: () {
+                                 setState(() {
+                                   if (_selectedIds.contains(data['id'])) {
+                                     _selectedIds.remove(data['id']);
+                                   } else {
+                                     if (_selectedIds.length >= 7) {
+                                       FunkyErrorDialog.show(context, message: "Whoa! You can only share 7 boards at a time to keep the QR code easy to scan.");
+                                       return;
+                                     }
+                                     _selectedIds.add(data['id']);
+                                   }
+                                 });
+                               },
                               onRename: () => _showRenameDialog(data['id'], data['name']),
                               onDelete: () => _confirmDelete(data['id']),
                               onRefresh: _refreshBoards,
