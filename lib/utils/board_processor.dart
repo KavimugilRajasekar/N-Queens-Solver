@@ -30,12 +30,14 @@ class BoardData {
   final List<List<int>> regionIds; // 1-based region IDs
   final Map<int, BoardRegion> regions;
   final String rawResponse;
+  Map<int, Point>? solution;
 
   BoardData({
     required this.size,
     required this.regionIds,
     required this.regions,
     required this.rawResponse,
+    this.solution,
   });
 }
 

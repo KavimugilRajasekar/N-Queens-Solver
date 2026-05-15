@@ -38,6 +38,9 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
   void initState() {
     super.initState();
     _isSaved = widget.isAlreadySaved;
+    if (widget.boardData.solution != null) {
+      _queenPositions = Map.from(widget.boardData.solution!);
+    }
   }
 
   void _scrollToBottom() {
@@ -102,6 +105,13 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
     setState(() {
       _isSolving = false;
       _isFastForward = false;
+      // Automatically save the solution to the board data and storage if successful
+      if (_queenPositions.length == widget.boardData.size) {
+        widget.boardData.solution = Map.from(_queenPositions);
+        if (widget.isAlreadySaved && widget.boardId != null) {
+          StorageManager.updateBoard(widget.boardId!, widget.boardData);
+        }
+      }
     });
   }
 
@@ -160,6 +170,11 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
 
       widget.boardData.regions.clear();
       widget.boardData.regions.addAll(newRegions);
+
+      // Clear previous solution as the board configuration has changed
+      widget.boardData.solution = null;
+      _queenPositions.clear();
+      _solverSteps.clear();
 
       if (widget.isAlreadySaved && widget.boardId != null) {
         StorageManager.updateBoard(widget.boardId!, widget.boardData);

@@ -196,11 +196,15 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
                     int c = i % board.size;
                     int id = board.regionIds[r][c];
                     bool isInvalid = id > board.size;
+                    bool hasQueen = board.solution?.values.any((p) => p.x - 1 == r && p.y - 1 == c) ?? false;
+                    
                     return Container(
                       color: RegionColors.getRegionColor(id, board.size),
-                      child: isInvalid 
-                        ? const Center(child: Icon(Icons.close_rounded, size: 8, color: Colors.black26)) 
-                        : null,
+                      child: hasQueen 
+                        ? const Center(child: Icon(Icons.stars_rounded, size: 6, color: AppColors.navyBlue))
+                        : (isInvalid 
+                            ? const Center(child: Icon(Icons.close_rounded, size: 8, color: Colors.black26)) 
+                            : null),
                     );
                   },
                 ),

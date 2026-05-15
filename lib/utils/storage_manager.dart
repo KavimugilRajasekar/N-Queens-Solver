@@ -37,6 +37,7 @@ class StorageManager {
         }
       )),
       'rawResponse': board.rawResponse,
+      'solution': board.solution?.map((id, p) => MapEntry(id.toString(), {'x': p.x, 'y': p.y})),
       'date': DateTime.now().toIso8601String(),
     };
 
@@ -61,6 +62,13 @@ class StorageManager {
           coordinates: (data['coords'] as List).map((p) => Point(p['x'], p['y'])).toList(),
         );
       });
+      
+      final solution = <int, Point>{};
+      if (item['solution'] != null) {
+        (item['solution'] as Map).forEach((id, p) {
+          solution[int.parse(id)] = Point(p['x'], p['y']);
+        });
+      }
 
       return {
         'id': item['id'],
@@ -71,6 +79,7 @@ class StorageManager {
           regionIds: (item['regionIds'] as List).map((row) => (row as List).map((id) => id as int).toList()).toList(),
           regions: regions,
           rawResponse: item['rawResponse'] ?? '',
+          solution: solution.isEmpty ? null : solution,
         ),
       };
     }).toList();
@@ -118,6 +127,7 @@ class StorageManager {
           'coords': region.coordinates.map((p) => {'x': p.x, 'y': p.y}).toList(),
         }
       ));
+      saved[index]['solution'] = board.solution?.map((id, p) => MapEntry(id.toString(), {'x': p.x, 'y': p.y}));
       saved[index]['date'] = DateTime.now().toIso8601String();
       await file.writeAsString(jsonEncode(saved));
     }
