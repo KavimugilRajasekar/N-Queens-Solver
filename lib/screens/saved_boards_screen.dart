@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:lottie/lottie.dart';
+import 'dart:convert';
+import 'package:pretty_qr_code/pretty_qr_code.dart';
 import '../constants/colors.dart';
 import '../utils/board_processor.dart';
 import '../constants/region_colors.dart';
@@ -9,6 +11,9 @@ import '../widgets/notebook_painter.dart';
 import 'camera_screen.dart';
 import 'create_board_screen.dart';
 import 'n_queens_board.dart';
+import 'qr_scanner_screen.dart';
+import '../widgets/library/board_card.dart';
+import '../widgets/library/qr_share_dialog.dart';
 
 class SavedBoardsScreen extends StatefulWidget {
   final List<CameraDescription> cameras;
@@ -22,6 +27,8 @@ class SavedBoardsScreen extends StatefulWidget {
 class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
   List<Map<String, dynamic>> _savedBoards = [];
   bool _isLoading = true;
+  bool _isSelectionMode = false;
+  final Set<int> _selectedIds = {};
 
   @override
   void initState() {
@@ -88,8 +95,13 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
                           icon: Icons.qr_code_scanner_rounded,
                           label: 'QR',
                           angle: 0.08,
-                          onTap: () {
-                            // TODO: Implement QR later
+                          onTap: () async {
+                            Navigator.pop(context);
+                            final result = await Navigator.push(
+                              context, 
+                              MaterialPageRoute(builder: (context) => const QRScannerScreen())
+                            );
+                            if (result == true) _refreshBoards();
                           },
                         ),
                         const SizedBox(width: 16),
@@ -221,7 +233,10 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
                         angle: 0.1,
                         child: GestureDetector(
                           onTap: () {
-                            // TODO: Implement Export logic
+                            setState(() {
+                              _isSelectionMode = !_isSelectionMode;
+                              if (!_isSelectionMode) _selectedIds.clear();
+                            });
                           },
                           child: Container(
                             padding: const EdgeInsets.all(8),
@@ -237,7 +252,7 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
                                 )
                               ],
                             ),
-                            child: const Icon(Icons.ios_share_rounded, color: AppColors.navyBlue, size: 20),
+                            child: Icon(_isSelectionMode ? Icons.close_rounded : Icons.ios_share_rounded, color: AppColors.navyBlue, size: 20),
                           ),
                         ),
                       ),
@@ -252,10 +267,29 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
                       : ListView.builder(
                           padding: const EdgeInsets.symmetric(horizontal: 24),
                           itemCount: _savedBoards.length,
-                          itemBuilder: (context, index) => _buildBoardCard(_savedBoards[index]),
+                          itemBuilder: (context, index) {
+                            final data = _savedBoards[index];
+                            return LibraryBoardCard(
+                              data: data,
+                              isSelectionMode: _isSelectionMode,
+                              isSelected: _selectedIds.contains(data['id']),
+                              onToggleSelection: () {
+                                setState(() {
+                                  if (_selectedIds.contains(data['id'])) {
+                                    _selectedIds.remove(data['id']);
+                                  } else {
+                                    _selectedIds.add(data['id']);
+                                  }
+                                });
+                              },
+                              onRename: () => _showRenameDialog(data['id'], data['name']),
+                              onDelete: () => _confirmDelete(data['id']),
+                              onRefresh: _refreshBoards,
+                            );
+                          },
                         ),
                 ),
-                _buildAddButton(),
+                if (!_isSelectionMode) _buildAddButton() else _buildQRButton(),
               ],
             ),
           ),
@@ -278,103 +312,6 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
     );
   }
 
-  Widget _buildBoardCard(Map<String, dynamic> data) {
-    final BoardData board = data['board'];
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.navyBlue.withOpacity(0.2), width: 1.5),
-        boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.05), offset: const Offset(4, 4))],
-      ),
-      child: Stack(
-        children: [
-          ListTile(
-            contentPadding: const EdgeInsets.all(16),
-            leading: Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                color: AppColors.background, 
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.navyBlue.withOpacity(0.1)),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: GridView.builder(
-                  padding: EdgeInsets.zero,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: board.size),
-                  itemCount: board.size * board.size,
-                  itemBuilder: (context, i) {
-                    int r = i ~/ board.size;
-                    int c = i % board.size;
-                    int id = board.regionIds[r][c];
-                    bool isInvalid = id > board.size;
-                    bool hasQueen = board.solution?.values.any((p) => p.x - 1 == r && p.y - 1 == c) ?? false;
-                    
-                    return Container(
-                      color: RegionColors.getRegionColor(id, board.size),
-                      child: Stack(
-                        children: [
-                          if (hasQueen) 
-                            const Center(child: Icon(Icons.stars_rounded, size: 6, color: AppColors.navyBlue)),
-                          if (isInvalid && !hasQueen)
-                            const Center(child: Icon(Icons.close_rounded, size: 8, color: Colors.black26)),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            title: Text(data['name'], style: const TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 18)),
-            subtitle: Text('${board.size}x${board.size} • ${data['date'].year}-${data['date'].month.toString().padLeft(2, '0')}-${data['date'].day.toString().padLeft(2, '0')}', style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 12)),
-            onTap: () async {
-              await Navigator.push(context, MaterialPageRoute(builder: (context) => NQueensBoardScreen(boardData: board, isAlreadySaved: true, boardId: data['id'])));
-              _refreshBoards();
-            },
-          ),
-          // Victory Badge
-          if (board.isManuallySolved)
-            Positioned(
-              top: 2,
-              left: 2,
-              child: SizedBox(
-                width: 42,
-                height: 42,
-                child: Lottie.asset(
-                  'assets/json/winner_badge.json',
-                  repeat: true,
-                ),
-              ),
-            ),
-          // Action Buttons at Bottom Right
-          Positioned(
-            bottom: 4,
-            right: 4,
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined, color: AppColors.navyBlue, size: 18),
-                  onPressed: () => _showRenameDialog(data['id'], data['name']),
-                  constraints: const BoxConstraints(),
-                  padding: const EdgeInsets.all(8),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
-                  onPressed: () => _confirmDelete(data['id']),
-                  constraints: const BoxConstraints(),
-                  padding: const EdgeInsets.all(8),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _showRenameDialog(int id, String currentName) {
     final controller = TextEditingController(text: currentName);
@@ -427,6 +364,48 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildQRButton() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+      child: Transform.rotate(
+        angle: -0.02,
+        child: Container(
+          width: double.infinity,
+          height: 65,
+          decoration: BoxDecoration(
+            color: _selectedIds.isEmpty ? Colors.grey.shade300 : AppColors.gold,
+            borderRadius: BorderRadius.circular(15),
+            boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(5, 5))],
+            border: Border.all(color: AppColors.navyBlue, width: 2),
+          ),
+          child: ElevatedButton.icon(
+            onPressed: _selectedIds.isEmpty ? null : _generateAndShowQR,
+            icon: const Icon(Icons.qr_code_2_rounded, size: 28),
+            label: Text('Generate QR (${_selectedIds.length})', style: const TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 20)),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, foregroundColor: AppColors.navyBlue, shadowColor: Colors.transparent, elevation: 0),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _generateAndShowQR() {
+    final List<Map<String, dynamic>> exportData = [];
+    for (var boardData in _savedBoards) {
+      if (_selectedIds.contains(boardData['id'])) {
+        final BoardData board = boardData['board'];
+        exportData.add({
+          'name': boardData['name'],
+          'size': board.size,
+          'regionIds': board.regionIds,
+        });
+      }
+    }
+    
+    final String jsonStr = jsonEncode(exportData);
+    QRShareDialog.show(context, jsonStr);
   }
 
   Widget _buildAddButton() {
