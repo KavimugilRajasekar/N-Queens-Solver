@@ -20,6 +20,7 @@ import '../widgets/error_dialog.dart';
 import '../widgets/success_dialog.dart';
 import 'generate_board_screen.dart';
 import '../utils/qr_crypto.dart';
+import 'package:shake/shake.dart';
 
 class SavedBoardsScreen extends StatefulWidget {
   final List<CameraDescription> cameras;
@@ -35,11 +36,50 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
   bool _isLoading = true;
   bool _isSelectionMode = false;
   final List<int> _selectedIds = [];
+  bool _isRenameMode = false;
+  ShakeDetector? _shakeDetector;
 
   @override
   void initState() {
     super.initState();
     _refreshBoards();
+    
+    // Initialize Shake detector
+    _shakeDetector = ShakeDetector.autoStart(
+      onPhoneShake: (_) {
+        if (!_isSelectionMode) {
+          setState(() => _isRenameMode = !_isRenameMode);
+          
+          // Provide Haptic Feedback
+          Feedback.forLongPress(context);
+          
+          // Visual confirmation
+          ScaffoldMessenger.of(context).hideCurrentSnackBar(); // Remove existing if any
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(_isRenameMode ? 'Switch to ✏️' : 'Switch to 🗑️', 
+                style: const TextStyle(fontFamily: 'DynaPuff', color: Colors.white, fontSize: 16)),
+              duration: const Duration(seconds: 1),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: AppColors.navyBlue,
+              margin: const EdgeInsets.only(bottom: 105, left: 40, right: 40),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15),
+                side: const BorderSide(color: Colors.white24, width: 1),
+              ),
+            ),
+          );
+        }
+      },
+      shakeThresholdGravity: 2.5, // Increased threshold (harder to trigger)
+      minimumShakeCount: 2,      // Requires a double-shake motion
+    );
+  }
+
+  @override
+  void dispose() {
+    _shakeDetector?.stopListening();
+    super.dispose();
   }
 
   Future<void> _refreshBoards() async {
@@ -290,21 +330,22 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
                             return LibraryBoardCard(
                               data: data,
                               isSelectionMode: _isSelectionMode,
-                               isSelected: selectionIndex != -1,
-                               selectionIndex: selectionIndex != -1 ? selectionIndex : null,
-                               onToggleSelection: () {
-                                 setState(() {
-                                   if (_selectedIds.contains(data['id'])) {
-                                     _selectedIds.remove(data['id']);
-                                   } else {
-                                     if (_selectedIds.length >= 7) {
-                                       FunkyErrorDialog.show(context, message: "Whoa! You can only share 7 boards at a time to keep the QR code easy to scan.");
-                                       return;
-                                     }
-                                     _selectedIds.add(data['id']);
-                                   }
-                                 });
-                               },
+                              isSelected: selectionIndex != -1,
+                              selectionIndex: selectionIndex != -1 ? selectionIndex : null,
+                              isRenameMode: _isRenameMode,
+                              onToggleSelection: () {
+                                setState(() {
+                                  if (_selectedIds.contains(data['id'])) {
+                                    _selectedIds.remove(data['id']);
+                                  } else {
+                                    if (_selectedIds.length >= 7) {
+                                      FunkyErrorDialog.show(context, message: "Whoa! You can only share 7 boards at a time to keep the QR code easy to scan.");
+                                      return;
+                                    }
+                                    _selectedIds.add(data['id']);
+                                  }
+                                });
+                              },
                               onRename: () => _showRenameDialog(data['id'], data['name']),
                               onDelete: () => _confirmDelete(data['id']),
                               onRefresh: _refreshBoards,

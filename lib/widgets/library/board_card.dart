@@ -16,12 +16,15 @@ class LibraryBoardCard extends StatelessWidget {
 
   final int? selectionIndex;
 
+  final bool isRenameMode;
+
   const LibraryBoardCard({
     super.key,
     required this.data,
     required this.isSelectionMode,
     required this.isSelected,
     this.selectionIndex,
+    this.isRenameMode = false,
     required this.onToggleSelection,
     required this.onRename,
     required this.onDelete,
@@ -122,21 +125,20 @@ class LibraryBoardCard extends StatelessWidget {
             Positioned(
               bottom: 4,
               right: 4,
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.edit_outlined, color: AppColors.navyBlue, size: 18),
-                    onPressed: onRename,
-                    constraints: const BoxConstraints(),
-                    padding: const EdgeInsets.all(8),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                child: IconButton(
+                  key: ValueKey(isRenameMode),
+                  icon: Icon(
+                    isRenameMode ? Icons.edit_outlined : Icons.delete_outline_rounded, 
+                    color: isRenameMode ? AppColors.navyBlue : Colors.redAccent, 
+                    size: 18
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
-                    onPressed: onDelete,
-                    constraints: const BoxConstraints(),
-                    padding: const EdgeInsets.all(8),
-                  ),
-                ],
+                  onPressed: isRenameMode ? onRename : onDelete,
+                  constraints: const BoxConstraints(),
+                  padding: const EdgeInsets.all(6),
+                ),
               ),
             ),
         ],
