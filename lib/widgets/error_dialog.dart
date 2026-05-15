@@ -3,8 +3,8 @@ import 'package:lottie/lottie.dart';
 import '../constants/colors.dart';
 
 class FunkyErrorDialog {
-  static void show(BuildContext context, {String title = 'Oops!', String message = 'Something went wrong!'}) {
-    showDialog(
+  static Future<void> show(BuildContext context, {String title = 'Oops!', String message = 'Something went wrong!'}) {
+    return showDialog(
       context: context,
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,

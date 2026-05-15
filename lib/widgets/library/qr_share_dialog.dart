@@ -5,6 +5,7 @@ import 'package:screenshot/screenshot.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../constants/colors.dart';
+import '../error_dialog.dart';
 
 class QRShareDialog extends StatefulWidget {
   final String qrData;
@@ -39,13 +40,11 @@ class _QRShareDialogState extends State<QRShareDialog> {
         final imagePath = await File('${directory.path}/n_queens_share.png').create();
         await imagePath.writeAsBytes(image);
 
-        await Share.shareXFiles([XFile(imagePath.path)], text: '🧩 Try these N-Queens boards in the N-Queens Solver app!');
+        await Share.shareXFiles([XFile(imagePath.path)], text: 'Try these N-Queens boards in the N-Queens Solver app!');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to share QR'), backgroundColor: Colors.red),
-        );
+        FunkyErrorDialog.show(context, message: 'Failed to capture and share the QR sticker.');
       }
     } finally {
       if (mounted) setState(() => _isSharing = false);
@@ -124,43 +123,27 @@ class _QRShareDialogState extends State<QRShareDialog> {
                           ),
                           const SizedBox(height: 20),
                           
-                          // QR and Info Row
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              // The QR Code
-                              Expanded(
-                                flex: 3,
-                                child: Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(color: AppColors.navyBlue.withOpacity(0.1), width: 1),
-                                    borderRadius: BorderRadius.circular(15),
-                                  ),
-                                  child: PrettyQrView.data(
-                                    data: widget.qrData,
-                                    decoration: const PrettyQrDecoration(
-                                      shape: PrettyQrSmoothSymbol(color: AppColors.navyBlue),
-                                    ),
-                                  ),
+                          // QR Centered Area
+                          Center(
+                            child: Container(
+                              width: 200,
+                              height: 200,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                border: Border.all(color: AppColors.navyBlue.withOpacity(0.1), width: 1.5),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(color: AppColors.navyBlue.withOpacity(0.05), offset: const Offset(4, 4), blurRadius: 4)
+                                ],
+                              ),
+                              child: PrettyQrView.data(
+                                data: widget.qrData,
+                                decoration: const PrettyQrDecoration(
+                                  shape: PrettyQrSmoothSymbol(color: AppColors.navyBlue),
                                 ),
                               ),
-                              const SizedBox(width: 20),
-                              // Info Text on the Right
-                              const Expanded(
-                                flex: 2,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('SCAN ME', style: TextStyle(fontFamily: 'DynaPuff', fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.gold)),
-                                    SizedBox(height: 8),
-                                    Text('1. Open App\n2. Library\n3. Scan QR', style: TextStyle(fontFamily: 'Comfortaa', fontSize: 11, color: AppColors.navyBlue, height: 1.5)),
-                                    SizedBox(height: 12),
-                                    Text('Solvable Boards', style: TextStyle(fontFamily: 'Comfortaa', fontSize: 9, fontWeight: FontWeight.bold, color: Colors.green)),
-                                  ],
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                           const SizedBox(height: 16),
                           const Text('Puzzle shared via N-Queens Studio', style: TextStyle(fontFamily: 'Comfortaa', fontSize: 9, fontStyle: FontStyle.italic, color: Colors.grey)),
