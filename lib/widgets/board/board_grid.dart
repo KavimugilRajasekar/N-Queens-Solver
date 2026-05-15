@@ -104,6 +104,18 @@ class BoardGrid extends StatelessWidget {
                               ),
                             ),
 
+                          if (isEditing && id > 0)
+                            Center(
+                              child: Text(
+                                '$id', 
+                                style: TextStyle(
+                                  fontFamily: 'DynaPuff', 
+                                  fontSize: (MediaQuery.of(context).size.width * boardScale * 0.3) / boardData.size, 
+                                  color: Colors.black.withOpacity(0.15), 
+                                  fontWeight: FontWeight.bold
+                                )
+                              )
+                            ),
                           if (hasQueen) 
                             Center(
                               child: Icon(

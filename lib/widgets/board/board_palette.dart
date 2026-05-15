@@ -51,7 +51,16 @@ class BoardPalette extends StatelessWidget {
                           border: Border.all(color: isSelected ? AppColors.navyBlue : Colors.transparent, width: 3),
                           boxShadow: isSelected ? [BoxShadow(color: AppColors.navyBlue.withOpacity(0.3), blurRadius: 8)] : [],
                         ),
-                        child: isSelected ? const Icon(Icons.check, color: AppColors.navyBlue, size: 20) : null,
+                        child: Center(
+                          child: Text(
+                            '$id', 
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold, 
+                              color: isSelected ? AppColors.navyBlue : Colors.black54,
+                              fontSize: 14,
+                            )
+                          )
+                        ),
                       ),
                     ),
                   );

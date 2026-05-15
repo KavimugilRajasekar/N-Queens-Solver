@@ -201,11 +201,14 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
                     
                     return Container(
                       color: RegionColors.getRegionColor(id, board.size),
-                      child: hasQueen 
-                        ? const Center(child: Icon(Icons.stars_rounded, size: 6, color: AppColors.navyBlue))
-                        : (isInvalid 
-                            ? const Center(child: Icon(Icons.close_rounded, size: 8, color: Colors.black26)) 
-                            : null),
+                      child: Stack(
+                        children: [
+                          if (hasQueen) 
+                            const Center(child: Icon(Icons.stars_rounded, size: 6, color: AppColors.navyBlue)),
+                          if (isInvalid && !hasQueen)
+                            const Center(child: Icon(Icons.close_rounded, size: 8, color: Colors.black26)),
+                        ],
+                      ),
                     );
                   },
                 ),

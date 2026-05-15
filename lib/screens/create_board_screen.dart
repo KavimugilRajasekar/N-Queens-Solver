@@ -211,6 +211,19 @@ class _CreateBoardScreenState extends State<CreateBoardScreen> {
                         onTap: () => _handleCellTap(r, c),
                         child: Container(
                           decoration: BoxDecoration(color: color, border: Border.all(color: Colors.black.withOpacity(0.05), width: 0.5)),
+                          child: id > 0 
+                            ? Center(
+                                child: Text(
+                                  '$id', 
+                                  style: TextStyle(
+                                    fontFamily: 'DynaPuff', 
+                                    fontSize: (MediaQuery.of(context).size.width * 0.8 * 0.3) / _size, 
+                                    color: Colors.black.withOpacity(0.15), 
+                                    fontWeight: FontWeight.bold
+                                  )
+                                )
+                              ) 
+                            : null,
                         ),
                       );
                     },
