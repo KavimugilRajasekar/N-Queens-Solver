@@ -41,6 +41,7 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
 
   bool _isFastForward = false;
   late bool _isSaved;
+  int? _boardId;
 
   // Manual Mode State
   bool _isManualMode = false;
@@ -53,9 +54,9 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
   void initState() {
     super.initState();
     _isSaved = widget.isAlreadySaved;
-    if (widget.boardData.solution != null) {
-      _queenPositions = Map.from(widget.boardData.solution!);
-    }
+    _boardId = widget.boardId;
+    // Puzzles should start empty for the user to solve!
+    _queenPositions = {};
   }
 
   @override
@@ -220,13 +221,16 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
         _timer?.cancel();
         
         widget.boardData.isManuallySolved = true;
-        if (_isSaved && widget.boardId != null) {
-          StorageManager.updateBoard(widget.boardId!, widget.boardData);
+        if (_isSaved && _boardId != null) {
+          StorageManager.updateBoard(_boardId!, widget.boardData);
         } else {
           // Auto-save if not already saved in library
-          StorageManager.saveBoard(widget.boardData).then((_) {
+          StorageManager.saveBoard(widget.boardData).then((id) {
             if (mounted) {
-              setState(() => _isSaved = true);
+              setState(() {
+                _isSaved = true;
+                _boardId = id;
+              });
             }
           });
         }
@@ -387,8 +391,8 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
       _queenPositions.clear();
       _solverSteps.clear();
 
-      if (widget.isAlreadySaved && widget.boardId != null) {
-        StorageManager.updateBoard(widget.boardId!, widget.boardData);
+      if (_isSaved && _boardId != null) {
+        StorageManager.updateBoard(_boardId!, widget.boardData);
       }
     }
     setState(() {
@@ -543,9 +547,12 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
                 decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.1), offset: const Offset(4, 4))], border: Border.all(color: AppColors.navyBlue.withOpacity(0.3), width: 1.5)),
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                    await StorageManager.saveBoard(widget.boardData);
+                    final id = await StorageManager.saveBoard(widget.boardData);
                     if (mounted) {
-                      setState(() => _isSaved = true);
+                      setState(() {
+                        _isSaved = true;
+                        _boardId = id;
+                      });
                     }
                   },
                   icon: const Icon(Icons.bookmark_add_rounded, size: 24, color: AppColors.navyBlue),

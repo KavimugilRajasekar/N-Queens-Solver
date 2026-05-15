@@ -15,6 +15,11 @@ import 'qr_scanner_screen.dart';
 import '../widgets/library/board_card.dart';
 import '../widgets/library/qr_share_dialog.dart';
 
+import '../utils/board_generator.dart';
+import '../widgets/error_dialog.dart';
+import '../widgets/success_dialog.dart';
+import 'generate_board_screen.dart';
+
 class SavedBoardsScreen extends StatefulWidget {
   final List<CameraDescription> cameras;
 
@@ -128,6 +133,17 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
                 onTap: () async {
                   Navigator.pop(context);
                   await Navigator.push(context, MaterialPageRoute(builder: (context) => CreateBoardScreen(cameras: widget.cameras)));
+                  _refreshBoards();
+                },
+              ),
+              const SizedBox(height: 16),
+              _buildOptionCard(
+                icon: Icons.auto_awesome_rounded,
+                title: 'Generate a Board',
+                subtitle: 'Randomly generate solvable puzzle',
+                onTap: () async {
+                  Navigator.pop(context);
+                  await Navigator.push(context, MaterialPageRoute(builder: (context) => const GenerateBoardScreen()));
                   _refreshBoards();
                 },
               ),
