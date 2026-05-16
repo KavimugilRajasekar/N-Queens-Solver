@@ -93,3 +93,9 @@ app.*.map.json
 # Coverage
 /coverage/
 
+# Ignore non-Android platforms
+ios/
+macos/
+linux/
+windows/
+web/
