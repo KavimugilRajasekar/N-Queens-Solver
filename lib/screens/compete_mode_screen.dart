@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../constants/colors.dart';
 import '../widgets/notebook_painter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'dart:io';
 
 class CompeteModeScreen extends StatefulWidget {
   const CompeteModeScreen({super.key});
@@ -12,7 +15,7 @@ class CompeteModeScreen extends StatefulWidget {
 class _CompeteModeScreenState extends State<CompeteModeScreen> {
   final TextEditingController _nameController = TextEditingController();
   String _selectedIcon = 'assets/player_icons/crown.png';
-  String _playerId = "GEN-0000-0000-0000";
+  String _playerId = "Loading Arena...";
 
   @override
   void initState() {
@@ -20,14 +23,44 @@ class _CompeteModeScreenState extends State<CompeteModeScreen> {
     _generatePlayerId();
   }
 
-  void _generatePlayerId() {
-    // Standard-Logic mock for Permanent MAC Address based ID
-    // In actual implementation, we would use a package like device_info_plus or get_mac_address
-    const mockMac = "A1:B2:C3:D4:E5:F6"; 
-    final hash = mockMac.hashCode.abs().toString().padLeft(8, '0');
-    setState(() {
-      _playerId = "ID-${hash.substring(0, 4)}-${hash.substring(4, 8)}";
-    });
+  Future<void> _generatePlayerId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String? storedId = prefs.getString('player_unique_id_v2'); // New version for 6-digit ID
+
+      if (storedId != null) {
+        if (mounted) setState(() => _playerId = storedId);
+        return;
+      }
+
+      // Generate a new ID based on hardware info (The modern equivalent of MAC logic)
+      String seed = "";
+      final deviceInfo = DeviceInfoPlugin();
+
+      if (Platform.isAndroid) {
+        final androidInfo = await deviceInfo.androidInfo;
+        seed = "${androidInfo.id}-${androidInfo.model}-${androidInfo.manufacturer}";
+      } else if (Platform.isIOS) {
+        final iosInfo = await deviceInfo.iosInfo;
+        seed = iosInfo.identifierForVendor ?? "IOS-${DateTime.now().millisecondsSinceEpoch}";
+      }
+
+      // Fallback for unexpected platform/empty seed
+      if (seed.isEmpty || seed.length < 5) {
+        seed = "DEVICE-${DateTime.now().millisecondsSinceEpoch}";
+      }
+
+      // Create a 6-digit unique hash (Standard Logic)
+      final hash = (seed.hashCode.abs() % 900000) + 100000; // Ensures exactly 6 digits (100000-999999)
+      final finalId = "ID-$hash";
+      
+      await prefs.setString('player_unique_id_v2', finalId);
+      if (mounted) setState(() => _playerId = finalId);
+    } catch (e) {
+      // Final fallback to ensure the app never hangs
+      final fallbackHash = (DateTime.now().millisecondsSinceEpoch % 900000) + 100000;
+      if (mounted) setState(() => _playerId = "ID-$fallbackHash");
+    }
   }
 
   final List<String> _icons = [
@@ -256,14 +289,7 @@ class _CompeteModeScreenState extends State<CompeteModeScreen> {
       angle: rotation,
       child: GestureDetector(
         onTap: () {
-          // Placeholder navigation
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Joining $title... 🚀', style: const TextStyle(fontFamily: 'DynaPuff')),
-              backgroundColor: isDark ? color : AppColors.navyBlue,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+          
         },
         child: Container(
           padding: const EdgeInsets.all(20),
