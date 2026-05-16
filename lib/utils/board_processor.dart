@@ -82,14 +82,22 @@ class BoardProcessor {
         contentType: MediaType('image', 'jpeg'),
       ));
 
-      var streamedResponse = await request.send().timeout(const Duration(seconds: 45));
+      http.StreamedResponse streamedResponse;
+      try {
+        streamedResponse = await request.send().timeout(const Duration(seconds: 45));
+      } on SocketException catch (_) {
+        throw Exception('Network disconnected! Please check your internet connection and try again.');
+      } catch (e) {
+        throw Exception('Server unreachable: $e');
+      }
+
       var response = await http.Response.fromStream(streamedResponse);
 
       debugPrint('API Status: ${response.statusCode}');
       debugPrint('API Raw Response: ${response.body}');
 
       if (response.statusCode != 200) {
-        throw Exception('Server Error (${response.statusCode}):\n${response.body}');
+        throw Exception('Server Error (${response.statusCode})');
       }
 
       // 3. Parse and Dynamic Size Detection

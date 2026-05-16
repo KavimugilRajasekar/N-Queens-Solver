@@ -93,9 +93,17 @@ class _CameraScreenState extends State<CameraScreen> with SingleTickerProviderSt
           _isProcessing = false;
           _capturedImagePath = null;
         });
+        
+        final errorStr = e.toString();
+        final isNetworkError = errorStr.contains('Network disconnected') || 
+                               errorStr.contains('SocketException') || 
+                               errorStr.contains('Connection failed');
+        
         FunkyErrorDialog.show(context,
-          title: 'Scan Failed!',
-          message: 'Could not process the board image. Try again with better lighting and alignment.',
+          title: isNetworkError ? 'No Network!' : 'Scan Failed!',
+          message: isNetworkError 
+            ? 'Please connect to the internet. Our smart engine needs a quick handshake with the server to process your board!'
+            : 'Could not process the board image. Try again with better lighting and alignment.',
         );
       }
     }
