@@ -9,6 +9,7 @@ import 'camera_screen.dart';
 import 'package:lottie/lottie.dart';
 import '../utils/board_processor.dart';
 import '../utils/shortcut_manager.dart';
+import 'compete_mode_screen.dart';
 
 class LandingPage extends StatefulWidget {
   final List<CameraDescription> cameras;
@@ -173,6 +174,8 @@ class _LandingPageState extends State<LandingPage> {
                     ),
                     const SizedBox(height: 80),
                     _buildMainActionButton(context),
+                    const SizedBox(height: 25),
+                    _buildCompeteModeButton(context),
                     const SizedBox(height: 60),
                   ],
                 ),
@@ -344,6 +347,52 @@ class _LandingPageState extends State<LandingPage> {
               Icon(Icons.rocket_launch_rounded, size: 30, color: AppColors.navyBlue),
               SizedBox(width: 15),
               Text('ENTER STUDIO', style: TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 24, color: AppColors.navyBlue)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompeteModeButton(BuildContext context) {
+    return Transform.rotate(
+      angle: 0.03, // More pronounced tilt for extra funkiness
+      child: GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const CompeteModeScreen()),
+          );
+        },
+        child: Container(
+          width: double.infinity,
+          height: 75,
+          decoration: BoxDecoration(
+            color: const Color(0xFFFF4081), // Neon Pink "Funky" Sticker
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.navyBlue, width: 3),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.navyBlue,
+                offset: const Offset(10, 10), // Even deeper shadow
+              ),
+            ],
+          ),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.emoji_events_rounded, size: 30, color: Colors.white),
+              SizedBox(width: 15),
+              Text(
+                'COMPETE MODE',
+                style: TextStyle(
+                  fontFamily: 'DynaPuff',
+                  fontWeight: FontWeight.bold,
+                  fontSize: 24,
+                  color: Colors.white,
+                  letterSpacing: 1.2,
+                ),
+              ),
             ],
           ),
         ),

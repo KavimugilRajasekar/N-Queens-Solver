@@ -74,6 +74,7 @@ flutter:
     - assets/bg/
     - assets/icons/
     - assets/json/
+    - assets/player_icons/
 
   fonts:
     - family: Comfortaa
