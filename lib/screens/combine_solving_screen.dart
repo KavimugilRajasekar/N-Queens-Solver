@@ -18,11 +18,15 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
   
   // Selection states
   String? _selectedColor; // 'blue' or 'red'
-  String _boardSource = 'auto'; // 'auto' or 'library'
-  int _selectedSize = 8; // Default 8x8 size
+  
+  // Per-match Board Configurations (up to 5 matches supported)
+  final List<String> _boardSources = List.generate(5, (_) => 'auto');
+  final List<int> _selectedSizes = List.generate(5, (_) => 8);
+  final List<Map<String, dynamic>?> _selectedLibraryBoards = List.generate(5, (_) => null);
+  
+  int _currentEditingMatchIndex = 0; // Index of match currently being configured
   
   List<Map<String, dynamic>> _masteredBoards = [];
-  Map<String, dynamic>? _selectedLibraryBoard;
   bool _isLoadingLibrary = false;
   
   int _matchCount = 3; // Default best of 3
@@ -52,7 +56,9 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
       setState(() {
         _masteredBoards = mastered;
         if (_masteredBoards.isNotEmpty) {
-          _selectedLibraryBoard = _masteredBoards.first;
+          for (int i = 0; i < 5; i++) {
+            _selectedLibraryBoards[i] = _masteredBoards.first;
+          }
         }
       });
     } catch (e) {
@@ -76,21 +82,32 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
       _showWarningDialog("Pick Your Colors!", "Select either Red or Blue to represent your side of the notebook!");
       return;
     }
-    if (_boardSource == 'library' && _selectedLibraryBoard == null) {
-      _showWarningDialog("Empty Library", "You must select a mastered board from your library or choose another board source.");
-      return;
+    
+    // Validate each match configuration in the series
+    for (int i = 0; i < _matchCount; i++) {
+      if (_boardSources[i] == 'library' && _selectedLibraryBoards[i] == null) {
+        _showWarningDialog("Empty Library Selection", "You selected 'My Library' for Match ${i + 1}, but haven't chosen a mastered board! Please select a board for Match ${i + 1}.");
+        return;
+      }
     }
 
     // Prepare battle parameters
+    final List<Map<String, dynamic>> matchesConfig = List.generate(_matchCount, (i) {
+      return {
+        'matchIndex': i + 1,
+        'boardSource': _boardSources[i],
+        'boardSize': _boardSources[i] == 'auto' 
+            ? '${_selectedSizes[i]}x${_selectedSizes[i]}' 
+            : (_selectedLibraryBoards[i]!['board'] as BoardData).size,
+        'selectedLibraryBoardId': _boardSources[i] == 'library' ? _selectedLibraryBoards[i]!['id'] : null,
+      };
+    });
+
     final Map<String, dynamic> sessionDetails = {
       'opponentId': opponentId,
       'playerColor': _selectedColor,
-      'boardSource': _boardSource,
-      'boardSize': _boardSource == 'auto' 
-          ? '$_selectedSize x $_selectedSize' 
-          : (_boardSource == 'library' ? (_selectedLibraryBoard!['board'] as BoardData).size : 'Auto Select'),
-      'selectedLibraryBoardId': _boardSource == 'library' ? _selectedLibraryBoard!['id'] : null,
       'matchCount': _matchCount,
+      'matches': matchesConfig,
     };
 
     // Show a funky co-op initiation popup
@@ -117,7 +134,7 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "Inviting Player: ID-$opponentId",
+              "Inviting Player: NQ-$opponentId",
               style: const TextStyle(fontFamily: 'Comfortaa', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.navyBlue),
             ),
             const SizedBox(height: 10),
@@ -130,15 +147,28 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
                 color: _selectedColor == 'blue' ? Colors.blue : Colors.red
               ),
             ),
-            const SizedBox(height: 10),
-            Text(
-              "Configuration: ${_boardSource == 'auto' ? 'Auto Generated $_selectedSize x $_selectedSize' : 'Mastered Board: \"${_selectedLibraryBoard!['name']}\"'}",
-              style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 13, color: AppColors.darkText),
+            const SizedBox(height: 12),
+            const Text(
+              "Matches Settings:",
+              style: TextStyle(fontFamily: 'DynaPuff', fontSize: 12, color: AppColors.navyBlue, fontWeight: FontWeight.bold),
             ),
+            const SizedBox(height: 6),
+            ...List.generate(_matchCount, (i) {
+              final src = _boardSources[i];
+              final size = src == 'auto' ? "${_selectedSizes[i]}x${_selectedSizes[i]}" : "Library";
+              final name = src == 'library' ? "\"${_selectedLibraryBoards[i]!['name']}\"" : "";
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 6.0),
+                child: Text(
+                  "✦ Match ${i + 1}: ${src == 'auto' ? 'Auto Generate ($size)' : 'Library $name'}",
+                  style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 12, color: AppColors.darkText),
+                ),
+              );
+            }),
             const SizedBox(height: 10),
             Text(
               "Match Mode: Best of $_matchCount Matches",
-              style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 13, color: AppColors.secondaryText),
+              style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 12, color: AppColors.secondaryText),
             ),
           ],
         ),
@@ -151,9 +181,11 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
             onPressed: () async {
               Navigator.pop(context);
               
-              // If Auto Generate is selected, generate the board using board_generator logic!
-              BoardData? generatedBoard;
-              if (_boardSource == 'auto') {
+              // Generate boards for each match if Auto Generate is selected!
+              final List<BoardData?> generatedBoards = [];
+              bool success = true;
+              
+              if (_boardSources.sublist(0, _matchCount).contains('auto')) {
                 // Show a funky progress loader
                 showDialog(
                   context: context,
@@ -170,7 +202,7 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
                         SizedBox(width: 20),
                         Expanded(
                           child: Text(
-                            "Weaving solvable board grids...",
+                            "Weaving solvable board series...",
                             style: TextStyle(fontFamily: 'DynaPuff', color: AppColors.navyBlue),
                           ),
                         ),
@@ -180,9 +212,18 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
                 );
                 
                 try {
-                  generatedBoard = await BoardGenerator.generateUniqueBoard(_selectedSize);
+                  for (int i = 0; i < _matchCount; i++) {
+                    if (_boardSources[i] == 'auto') {
+                      final board = await BoardGenerator.generateUniqueBoard(_selectedSizes[i]);
+                      generatedBoards.add(board);
+                      if (board == null) success = false;
+                    } else {
+                      generatedBoards.add(null);
+                    }
+                  }
                 } catch (e) {
-                  debugPrint("Error generating board: $e");
+                  debugPrint("Error generating board series: $e");
+                  success = false;
                 } finally {
                   if (context.mounted) {
                     Navigator.pop(context); // close loader dialog
@@ -195,10 +236,8 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
                   SnackBar(
                     backgroundColor: AppColors.navyBlue,
                     content: Text(
-                      _boardSource == 'auto'
-                          ? (generatedBoard != null 
-                              ? "Solvable ${_selectedSize}x${_selectedSize} Board Generated! Connecting to NQ-$opponentId..." 
-                              : "Generated solvable board! Connecting to NQ-$opponentId...")
+                      success 
+                          ? "Generated solvability maps! Connecting to NQ-$opponentId..."
                           : "Connecting to NQ-$opponentId... Room synchronized!",
                       style: const TextStyle(fontFamily: 'Comfortaa', fontWeight: FontWeight.bold),
                     ),
@@ -547,6 +586,51 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
             ),
             const SizedBox(height: 15),
 
+            // If we have more than 1 match in series, show funky Match selector tabs
+            if (_matchCount > 1) ...[
+              const Text(
+                'CONFIGURE BOARDS FOR SERIES:',
+                style: TextStyle(fontFamily: 'DynaPuff', fontSize: 10, color: AppColors.secondaryText),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(_matchCount, (index) {
+                  final isSelected = _currentEditingMatchIndex == index;
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _currentEditingMatchIndex = index),
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected ? AppColors.navyBlue : Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.navyBlue, width: isSelected ? 2.5 : 1.2),
+                          boxShadow: isSelected
+                              ? [const BoxShadow(color: AppColors.navyBlue, offset: Offset(2, 2))]
+                              : null,
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          _matchCount == 5 ? "${index + 1}" : "Match ${index + 1}",
+                          style: TextStyle(
+                            fontFamily: 'DynaPuff',
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: isSelected ? Colors.white : AppColors.navyBlue,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(height: 15),
+              const Divider(color: AppColors.paperLine, thickness: 1.5),
+              const SizedBox(height: 10),
+            ],
+
             // Tab bar options (Auto Generate and My Library)
             Container(
               decoration: BoxDecoration(
@@ -572,10 +656,10 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
   }
 
   Widget _buildSourceTab(String key, String label) {
-    final isSelected = _boardSource == key;
+    final isSelected = _boardSources[_currentEditingMatchIndex] == key;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _boardSource = key),
+        onTap: () => setState(() => _boardSources[_currentEditingMatchIndex] = key),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
@@ -598,7 +682,11 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
   }
 
   Widget _buildSourceConfigurator() {
-    if (_boardSource == 'auto') {
+    final currentSource = _boardSources[_currentEditingMatchIndex];
+    final currentSize = _selectedSizes[_currentEditingMatchIndex];
+    final currentLibraryBoard = _selectedLibraryBoards[_currentEditingMatchIndex];
+
+    if (currentSource == 'auto') {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -623,7 +711,6 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
             ),
           ),
           const SizedBox(height: 20),
-          // Board Size option under Auto Generate
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -648,7 +735,7 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
                       ],
                     ),
                     Text(
-                      "${_selectedSize}x${_selectedSize}",
+                      "${currentSize}x${currentSize}",
                       style: const TextStyle(fontFamily: 'DynaPuff', fontSize: 14, color: AppColors.navyBlue, fontWeight: FontWeight.bold),
                     ),
                   ],
@@ -671,12 +758,12 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
                     valueIndicatorTextStyle: const TextStyle(fontFamily: 'DynaPuff'),
                   ),
                   child: Slider(
-                    value: _selectedSize.toDouble(),
+                    value: currentSize.toDouble(),
                     min: 4,
                     max: 12,
                     divisions: 8,
-                    label: "${_selectedSize}x${_selectedSize}",
-                    onChanged: (val) => setState(() => _selectedSize = val.toInt()),
+                    label: "${currentSize}x${currentSize}",
+                    onChanged: (val) => setState(() => _selectedSizes[_currentEditingMatchIndex] = val.toInt()),
                   ),
                 ),
               ],
@@ -685,7 +772,6 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
         ],
       );
     } else {
-      // Library mode
       if (_isLoadingLibrary) {
         return const Center(
           child: Padding(
@@ -737,10 +823,10 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
               itemBuilder: (context, index) {
                 final boardMap = _masteredBoards[index];
                 final board = boardMap['board'] as BoardData;
-                final isSelected = _selectedLibraryBoard?['id'] == boardMap['id'];
+                final isSelected = currentLibraryBoard?['id'] == boardMap['id'];
 
                 return GestureDetector(
-                  onTap: () => setState(() => _selectedLibraryBoard = boardMap),
+                  onTap: () => setState(() => _selectedLibraryBoards[_currentEditingMatchIndex] = boardMap),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
                     margin: const EdgeInsets.only(right: 12, bottom: 8),
@@ -761,22 +847,33 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          boardMap['name'] ?? 'Unnamed',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontFamily: 'DynaPuff', fontSize: 12, color: AppColors.navyBlue, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 4),
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              "${board.size}x${board.size}",
-                              style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 11, color: AppColors.secondaryText, fontWeight: FontWeight.bold),
-                            ),
                             const Icon(Icons.emoji_events_rounded, color: Colors.orange, size: 16),
+                            const SizedBox(width: 5),
+                            Expanded(
+                              child: Text(
+                                boardMap['name'] ?? 'Unnamed',
+                                style: const TextStyle(
+                                  fontFamily: 'DynaPuff',
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.navyBlue,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          "Grid: ${board.size}x${board.size}",
+                          style: const TextStyle(
+                            fontFamily: 'Comfortaa',
+                            fontSize: 10,
+                            color: AppColors.secondaryText,
+                          ),
                         ),
                       ],
                     ),
@@ -835,7 +932,14 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
     final isSelected = _matchCount == count;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _matchCount = count),
+        onTap: () {
+          setState(() {
+            _matchCount = count;
+            if (_currentEditingMatchIndex >= _matchCount) {
+              _currentEditingMatchIndex = _matchCount - 1;
+            }
+          });
+        },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           margin: const EdgeInsets.symmetric(horizontal: 5),
