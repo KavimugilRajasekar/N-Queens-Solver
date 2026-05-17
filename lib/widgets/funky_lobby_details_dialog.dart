@@ -141,7 +141,9 @@ class FunkyLobbyDetailsDialog extends StatelessWidget {
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: playerColor.toLowerCase() == 'blue' ? const Color(0xFFE0F7FA) : const Color(0xFFFFEBEE),
+                        color: playerColor.toLowerCase() == 'blue' 
+                            ? const Color(0xFFE0F7FA) 
+                            : (playerColor.toLowerCase() == 'green' ? const Color(0xFFE8F5E9) : const Color(0xFFFFEBEE)),
                         borderRadius: BorderRadius.circular(15),
                         border: Border.all(color: AppColors.navyBlue, width: 2),
                       ),
@@ -149,7 +151,9 @@ class FunkyLobbyDetailsDialog extends StatelessWidget {
                         children: [
                           Icon(
                             Icons.favorite_rounded, 
-                            color: playerColor.toLowerCase() == 'blue' ? Colors.blue : Colors.red,
+                            color: playerColor.toLowerCase() == 'blue' 
+                                ? Colors.blue 
+                                : (playerColor.toLowerCase() == 'green' ? Colors.green : Colors.red),
                             size: 24,
                           ),
                           const SizedBox(width: 10),
@@ -167,7 +171,9 @@ class FunkyLobbyDetailsDialog extends StatelessWidget {
                                     fontFamily: 'Comfortaa', 
                                     fontSize: 16, 
                                     fontWeight: FontWeight.bold, 
-                                    color: playerColor.toLowerCase() == 'blue' ? Colors.blue : Colors.red,
+                                    color: playerColor.toLowerCase() == 'blue' 
+                                        ? Colors.blue 
+                                        : (playerColor.toLowerCase() == 'green' ? Colors.green : Colors.red),
                                   ),
                                 ),
                               ],

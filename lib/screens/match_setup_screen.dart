@@ -9,6 +9,7 @@ import '../constants/region_colors.dart';
 import '../utils/board_generator.dart';
 import '../widgets/funky_loader_dialog.dart';
 import '../widgets/funky_lobby_details_dialog.dart';
+import 'peers_play_screen.dart';
 
 class MatchSetupScreen extends StatefulWidget {
   final bool isCompeteMode;
@@ -92,7 +93,12 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
       return;
     }
     if (_selectedColor == null) {
-      _showWarningDialog("Pick Your Colors!", "Select either Red or Blue to represent your side of the notebook!");
+      _showWarningDialog(
+        "Pick Your Colors!",
+        widget.isCompeteMode 
+            ? "Select either Red or Blue to represent your side of the notebook!"
+            : "Select either Green or Blue to represent your side of the notebook!",
+      );
       return;
     }
     
@@ -187,14 +193,23 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                         borderRadius: BorderRadius.circular(20),
                         side: const BorderSide(color: AppColors.navyBlue, width: 3),
                       ),
-                      backgroundColor: const Color(0xFFF1F8E9), // Mint Green
+                      backgroundColor: widget.isCompeteMode ? const Color(0xFFFFEBEE) : const Color(0xFFE8F5E9), // Red vs Green success theme!
                       title: Row(
                         children: [
-                          const Icon(Icons.sports_esports_rounded, color: AppColors.navyBlue, size: 28),
+                          Icon(
+                            Icons.sports_esports_rounded, 
+                            color: widget.isCompeteMode ? Colors.redAccent.shade700 : Colors.green.shade700, 
+                            size: 28,
+                          ),
                           const SizedBox(width: 10),
                           Text(
                             widget.isCompeteMode ? "DUEL ACTIVE!" : "CONNECTION LIVE!",
-                            style: const TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.navyBlue),
+                            style: TextStyle(
+                              fontFamily: 'DynaPuff', 
+                              fontWeight: FontWeight.bold, 
+                              fontSize: 18, 
+                              color: widget.isCompeteMode ? Colors.redAccent.shade700 : Colors.green.shade700,
+                            ),
                           ),
                         ],
                       ),
@@ -217,7 +232,30 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                       ),
                       actions: [
                         ElevatedButton(
-                          onPressed: () => Navigator.pop(successCtx),
+                          onPressed: () {
+                            Navigator.pop(successCtx);
+                            
+                            // Map all generated/selected boards to a list of valid BoardData
+                            final List<BoardData> validMatchBoards = [];
+                            for (var board in generatedBoards) {
+                              if (board != null) {
+                                validMatchBoards.add(board);
+                              }
+                            }
+
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => PeersPlayScreen(
+                                  isCompeteMode: widget.isCompeteMode,
+                                  opponentId: opponentId,
+                                  playerColor: _selectedColor!,
+                                  matchCount: _matchCount,
+                                  matchBoards: validMatchBoards,
+                                ),
+                              ),
+                            );
+                          },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.navyBlue,
                             foregroundColor: Colors.white,
@@ -293,7 +331,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                         width: 55,
                         height: 55,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFE3F2FD),
+                          color: widget.isCompeteMode ? const Color(0xFFFFEBEE) : const Color(0xFFE8F5E9), // Red vs Green back button box!
                           borderRadius: BorderRadius.circular(15),
                           border: Border.all(color: AppColors.navyBlue, width: 2.5),
                           boxShadow: [
@@ -303,7 +341,11 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                             )
                           ],
                         ),
-                        child: const Icon(Icons.arrow_back_rounded, color: AppColors.navyBlue, size: 28),
+                        child: Icon(
+                          Icons.arrow_back_rounded, 
+                          color: widget.isCompeteMode ? Colors.redAccent.shade700 : Colors.green.shade700, 
+                          size: 28,
+                        ),
                       ),
                     ),
                   ),
@@ -491,21 +533,23 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                   ),
                 ),
                 const SizedBox(width: 15),
-                // Red option
+                // Red/Green option
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => setState(() => _selectedColor = 'red'),
+                    onTap: () => setState(() => _selectedColor = widget.isCompeteMode ? 'red' : 'green'),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
                       padding: const EdgeInsets.symmetric(vertical: 18),
                       decoration: BoxDecoration(
-                        color: _selectedColor == 'red' ? const Color(0xFFFF1744) : Colors.white,
+                        color: _selectedColor == (widget.isCompeteMode ? 'red' : 'green') 
+                            ? (widget.isCompeteMode ? const Color(0xFFFF1744) : const Color(0xFF00E676)) 
+                            : Colors.white,
                         borderRadius: BorderRadius.circular(15),
                         border: Border.all(
                           color: AppColors.navyBlue, 
-                          width: _selectedColor == 'red' ? 3.0 : 1.5
+                          width: _selectedColor == (widget.isCompeteMode ? 'red' : 'green') ? 3.0 : 1.5
                         ),
-                        boxShadow: _selectedColor == 'red' 
+                        boxShadow: _selectedColor == (widget.isCompeteMode ? 'red' : 'green') 
                             ? [const BoxShadow(color: AppColors.navyBlue, offset: Offset(4, 4))] 
                             : null,
                       ),
@@ -514,16 +558,18 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                           Icon(
                             Icons.favorite_rounded,
                             size: 28,
-                            color: _selectedColor == 'red' ? Colors.white : const Color(0xFFFF1744),
+                            color: _selectedColor == (widget.isCompeteMode ? 'red' : 'green') 
+                                ? Colors.white 
+                                : (widget.isCompeteMode ? const Color(0xFFFF1744) : const Color(0xFF00E676)),
                           ),
                           const SizedBox(height: 5),
                           Text(
-                            "RED",
+                            widget.isCompeteMode ? "RED" : "GREEN",
                             style: TextStyle(
                               fontFamily: 'DynaPuff',
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: _selectedColor == 'red' ? Colors.white : AppColors.navyBlue,
+                              color: _selectedColor == (widget.isCompeteMode ? 'red' : 'green') ? Colors.white : AppColors.navyBlue,
                             ),
                           ),
                         ],
