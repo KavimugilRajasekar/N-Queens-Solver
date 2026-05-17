@@ -388,6 +388,8 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
       widget.boardData.regions.clear();
       widget.boardData.regions.addAll(newRegions);
       widget.boardData.solution = null;
+      // Reset manual solver trophy badge since layout has been altered!
+      widget.boardData.isManuallySolved = false;
       _queenPositions.clear();
       _solverSteps.clear();
 
