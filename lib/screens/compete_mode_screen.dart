@@ -4,6 +4,7 @@ import '../widgets/notebook_painter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:io';
+import 'combine_solving_screen.dart';
 
 class CompeteModeScreen extends StatefulWidget {
   const CompeteModeScreen({super.key});
@@ -21,11 +22,39 @@ class _CompeteModeScreenState extends State<CompeteModeScreen> {
   void initState() {
     super.initState();
     _generatePlayerId();
+    _nameController.addListener(() {
+      setState(() {});
+      _savePlayerNickname();
+    });
+  }
+
+  Future<void> _savePlayerNickname() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('player_nickname', _nameController.text.trim());
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
   }
 
   Future<void> _generatePlayerId() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      
+      // Load stored player nickname
+      final storedName = prefs.getString('player_nickname');
+      if (storedName != null && storedName.isNotEmpty) {
+        _nameController.text = storedName;
+      }
+      
+      // Load stored icon selection
+      final storedIcon = prefs.getString('player_icon');
+      if (storedIcon != null && storedIcon.isNotEmpty) {
+        if (mounted) setState(() => _selectedIcon = storedIcon);
+      }
+
       String? storedId = prefs.getString('player_unique_id_v2'); // New version for 6-digit ID
 
       if (storedId != null) {
@@ -52,14 +81,14 @@ class _CompeteModeScreenState extends State<CompeteModeScreen> {
 
       // Create a 6-digit unique hash (Standard Logic)
       final hash = (seed.hashCode.abs() % 900000) + 100000; // Ensures exactly 6 digits (100000-999999)
-      final finalId = "ID-$hash";
+      final finalId = "NQ-$hash";
       
       await prefs.setString('player_unique_id_v2', finalId);
       if (mounted) setState(() => _playerId = finalId);
     } catch (e) {
       // Final fallback to ensure the app never hangs
       final fallbackHash = (DateTime.now().millisecondsSinceEpoch % 900000) + 100000;
-      if (mounted) setState(() => _playerId = "ID-$fallbackHash");
+      if (mounted) setState(() => _playerId = "NQ-$fallbackHash");
     }
   }
 
@@ -221,7 +250,11 @@ class _CompeteModeScreenState extends State<CompeteModeScreen> {
               final icon = _icons[index];
               final isSelected = _selectedIcon == icon;
               return GestureDetector(
-                onTap: () => setState(() => _selectedIcon = icon),
+                onTap: () async {
+                  setState(() => _selectedIcon = icon);
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setString('player_icon', icon);
+                },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   margin: const EdgeInsets.only(right: 15),
@@ -276,6 +309,44 @@ class _CompeteModeScreenState extends State<CompeteModeScreen> {
     );
   }
 
+  void _showNameWarningDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(25),
+          side: const BorderSide(color: AppColors.navyBlue, width: 3),
+        ),
+        backgroundColor: Colors.white,
+        title: const Row(
+          children: [
+            Icon(Icons.edit_note_rounded, color: Colors.orange, size: 28),
+            SizedBox(width: 10),
+            Text(
+              "Identity Crisis!",
+              style: TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 20, color: AppColors.navyBlue),
+            ),
+          ],
+        ),
+        content: const Text(
+          "Every player needs a name written in the margins of their notebook! Please enter a funky player name to activate the solving modes.",
+          style: TextStyle(fontFamily: 'Comfortaa', fontSize: 14, color: AppColors.darkText),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.navyBlue,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            ),
+            child: const Text("GOT IT", style: TextStyle(fontFamily: 'DynaPuff')),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildModeButton({
     required String title,
     required String subtitle,
@@ -285,64 +356,86 @@ class _CompeteModeScreenState extends State<CompeteModeScreen> {
     required double rotation,
     bool isDark = false,
   }) {
+    final isNameEmpty = _nameController.text.trim().isEmpty;
+
     return Transform.rotate(
       angle: rotation,
       child: GestureDetector(
         onTap: () {
-          
+          if (isNameEmpty) {
+            _showNameWarningDialog();
+            return;
+          }
+          if (mode == 'combine') {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const CombineSolvingScreen()),
+            );
+          }
         },
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(25),
-            border: Border.all(
-              color: AppColors.navyBlue, 
-              width: 3
-            ),
-            boxShadow: const [
-              BoxShadow(
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 200),
+          opacity: isNameEmpty ? 0.5 : 1.0,
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: isNameEmpty ? Colors.grey[200] : color,
+              borderRadius: BorderRadius.circular(25),
+              border: Border.all(
                 color: AppColors.navyBlue, 
-                offset: Offset(6, 6)
+                width: 3
               ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.3),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: isDark ? Colors.white : AppColors.navyBlue, size: 30),
-              ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontFamily: 'DynaPuff',
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : AppColors.navyBlue,
-                      ),
+              boxShadow: isNameEmpty 
+                ? const [
+                    BoxShadow(
+                      color: AppColors.navyBlue, 
+                      offset: Offset(2, 2)
                     ),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontFamily: 'Comfortaa',
-                        fontSize: 14,
-                        color: (isDark ? Colors.white : AppColors.navyBlue).withOpacity(0.8),
-                      ),
+                  ]
+                : const [
+                    BoxShadow(
+                      color: AppColors.navyBlue, 
+                      offset: Offset(6, 6)
                     ),
                   ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white.withOpacity(0.3) : AppColors.navyBlue.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: isDark ? Colors.white : AppColors.navyBlue, size: 30),
                 ),
-              ),
-            ],
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontFamily: 'DynaPuff',
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : AppColors.navyBlue,
+                        ),
+                      ),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontFamily: 'Comfortaa',
+                          fontSize: 14,
+                          color: (isDark ? Colors.white : AppColors.navyBlue).withOpacity(0.8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
