@@ -36,6 +36,8 @@ class WebRTCSignalingManager {
   // WebRTC Peer Connection and Data Channel
   RTCPeerConnection? _peerConnection;
   RTCDataChannel? _dataChannel;
+  final List<Map<String, dynamic>> _iceCandidatesQueue = [];
+  Timer? _iceCandidatesTimer;
 
   // Stream controller to broadcast received game messages to PeerPlayScreen
   final StreamController<Map<String, dynamic>> _messageController = StreamController<Map<String, dynamic>>.broadcast();
@@ -155,6 +157,26 @@ class WebRTCSignalingManager {
     }
   }
 
+  void _queueIceCandidate(String targetPeerId, RTCIceCandidate candidate) {
+    _iceCandidatesQueue.add({
+      'candidate': candidate.candidate,
+      'sdpMid': candidate.sdpMid,
+      'sdpMLineIndex': candidate.sdpMLineIndex,
+    });
+    
+    _iceCandidatesTimer?.cancel();
+    _iceCandidatesTimer = Timer(const Duration(milliseconds: 400), () async {
+      if (_iceCandidatesQueue.isEmpty) return;
+      final batch = List<Map<String, dynamic>>.from(_iceCandidatesQueue);
+      _iceCandidatesQueue.clear();
+      
+      debugPrint("WebRTC: Dispatching batch of ${batch.length} ICE candidates to $targetPeerId.");
+      await _sendSignal(targetPeerId, 'candidate', {
+        'candidate': batch,
+      });
+    });
+  }
+
   // Register Player FCM Token and ID with Vercel signaling server
   Future<bool> registerPlayerProfile() async {
     try {
@@ -254,6 +276,17 @@ class WebRTCSignalingManager {
     if (fromPlayerId == null || type == null) return;
 
     if (type == 'invite') {
+      // 5-Minute Timeout / Invite Expiration Check
+      final inviteTimestampStr = data['timestamp'];
+      if (inviteTimestampStr != null) {
+        final inviteTimestamp = int.tryParse(inviteTimestampStr) ?? 0;
+        final currentTimestamp = DateTime.now().millisecondsSinceEpoch;
+        if (currentTimestamp - inviteTimestamp > 300000) { // 300,000 ms = 5 minutes
+          debugPrint("FCM invite skipped: Challenge has expired (> 5 minutes old).");
+          return;
+        }
+      }
+
       // Incoming Duel/Coop Challenge!
       final isCompeteMode = data['isCompeteMode'] == 'true';
       final int matchCount = int.parse(data['matchCount'] ?? '3');
@@ -278,18 +311,35 @@ class WebRTCSignalingManager {
         await _peerConnection!.setRemoteDescription(RTCSessionDescription(sdp, 'answer'));
       }
     } else if (type == 'candidate') {
-      // Received ICE candidate
+      // Received ICE candidate (Supports both single maps and batched lists!)
       final candidateStr = data['candidate'];
       if (candidateStr != null && _peerConnection != null) {
-        final candidateData = jsonDecode(candidateStr);
-        debugPrint("WebRTC: Received Remote ICE Candidate.");
-        await _peerConnection!.addCandidate(
-          RTCIceCandidate(
-            candidateData['candidate'],
-            candidateData['sdpMid'],
-            candidateData['sdpMLineIndex'],
-          ),
-        );
+        try {
+          final decoded = jsonDecode(candidateStr);
+          if (decoded is List) {
+            debugPrint("WebRTC: Processing a batch of ${decoded.length} remote ICE candidates!");
+            for (var candidateData in decoded) {
+              await _peerConnection!.addCandidate(
+                RTCIceCandidate(
+                  candidateData['candidate'],
+                  candidateData['sdpMid'],
+                  candidateData['sdpMLineIndex'],
+                ),
+              );
+            }
+          } else {
+            debugPrint("WebRTC: Processing single remote ICE candidate.");
+            await _peerConnection!.addCandidate(
+              RTCIceCandidate(
+                decoded['candidate'],
+                decoded['sdpMid'],
+                decoded['sdpMLineIndex'],
+              ),
+            );
+          }
+        } catch (e) {
+          debugPrint("Failed to parse remote ICE candidates: $e");
+        }
       }
     }
   }
@@ -325,24 +375,24 @@ class WebRTCSignalingManager {
     _dataChannel = await _peerConnection!.createDataChannel('game_channel', init);
     _setupDataChannelListeners();
 
-    // 4. Handle ICE Candidates and route them via server
+    // 4. Handle ICE Candidates and route them via server (Batched for zero network clutter)
     _peerConnection!.onIceCandidate = (RTCIceCandidate candidate) {
-      debugPrint("Host: Local ICE Candidate gathered. Routing to peer...");
-      _sendSignal(peerId, 'candidate', {
-        'candidate': {
-          'candidate': candidate.candidate,
-          'sdpMid': candidate.sdpMid,
-          'sdpMLineIndex': candidate.sdpMLineIndex,
-        }
-      });
+      debugPrint("Host: Local ICE Candidate gathered. Queueing to peer...");
+      _queueIceCandidate(peerId, candidate);
     };
 
-    _peerConnection!.onConnectionState = (state) {
+    _peerConnection!.onConnectionState = (state) async {
       debugPrint("Host Peer Connection State changed: $state");
       if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
         connectionState.value = 'connected';
       } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
-        connectionState.value = 'failed';
+        // Protect timing: only fail if the remote description has been set (meaning partner accepted)!
+        final remoteDesc = await _peerConnection?.getRemoteDescription();
+        if (remoteDesc != null) {
+          connectionState.value = 'failed';
+        } else {
+          debugPrint("Host: Early failed state ignored because handshake has not started yet.");
+        }
       }
     };
 
@@ -391,24 +441,24 @@ class WebRTCSignalingManager {
       _setupDataChannelListeners();
     };
 
-    // 3. Handle ICE Candidates and route them via server
+    // 3. Handle ICE Candidates and route them via server (Batched for zero network clutter)
     _peerConnection!.onIceCandidate = (RTCIceCandidate candidate) {
-      debugPrint("Joiner: Local ICE Candidate gathered. Routing to host...");
-      _sendSignal(hostId, 'candidate', {
-        'candidate': {
-          'candidate': candidate.candidate,
-          'sdpMid': candidate.sdpMid,
-          'sdpMLineIndex': candidate.sdpMLineIndex,
-        }
-      });
+      debugPrint("Joiner: Local ICE Candidate gathered. Queueing to host...");
+      _queueIceCandidate(hostId, candidate);
     };
 
-    _peerConnection!.onConnectionState = (state) {
+    _peerConnection!.onConnectionState = (state) async {
       debugPrint("Joiner Peer Connection State changed: $state");
       if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
         connectionState.value = 'connected';
       } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
-        connectionState.value = 'failed';
+        // Protect timing: only fail if the remote description has been set (meaning partner accepted)!
+        final remoteDesc = await _peerConnection?.getRemoteDescription();
+        if (remoteDesc != null) {
+          connectionState.value = 'failed';
+        } else {
+          debugPrint("Joiner: Early failed state ignored because handshake has not started yet.");
+        }
       }
     };
 
@@ -469,6 +519,9 @@ class WebRTCSignalingManager {
     _peerConnection?.close();
     _dataChannel = null;
     _peerConnection = null;
+    _iceCandidatesTimer?.cancel();
+    _iceCandidatesTimer = null;
+    _iceCandidatesQueue.clear();
     activePeerId = null;
     activePeerNickname = null;
     activePeerIcon = null;
