@@ -5,6 +5,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:io';
 import 'match_setup_screen.dart';
+import '../widgets/success_dialog.dart';
+import '../widgets/error_dialog.dart';
+import '../utils/webrtc_signaling_manager.dart';
 
 class CompeteModeScreen extends StatefulWidget {
   const CompeteModeScreen({super.key});
@@ -17,6 +20,7 @@ class _CompeteModeScreenState extends State<CompeteModeScreen> {
   final TextEditingController _nameController = TextEditingController();
   String _selectedIcon = 'assets/player_icons/crown.png';
   String _playerId = "Loading Arena...";
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -85,10 +89,19 @@ class _CompeteModeScreenState extends State<CompeteModeScreen> {
       
       await prefs.setString('player_unique_id_v2', finalId);
       if (mounted) setState(() => _playerId = finalId);
+
+      // Auto-register immediately upon first-time generation so peer matches work on first launch!
+      await WebRTCSignalingManager.instance.registerPlayerProfile();
     } catch (e) {
       // Final fallback to ensure the app never hangs
       final fallbackHash = (DateTime.now().millisecondsSinceEpoch % 900000) + 100000;
-      if (mounted) setState(() => _playerId = "NQ-$fallbackHash");
+      final finalId = "NQ-$fallbackHash";
+      
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('player_unique_id_v2', finalId);
+      if (mounted) setState(() => _playerId = finalId);
+      
+      await WebRTCSignalingManager.instance.registerPlayerProfile();
     }
   }
 
@@ -280,8 +293,89 @@ class _CompeteModeScreenState extends State<CompeteModeScreen> {
             },
           ),
         ),
+        const SizedBox(height: 15),
+        Center(
+          child: Transform.rotate(
+            angle: -0.015,
+            child: GestureDetector(
+              onTap: _isSaving ? null : _registerProfile,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.gold,
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: AppColors.navyBlue, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.navyBlue.withOpacity(0.2),
+                      offset: const Offset(4, 4),
+                    )
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_isSaving)
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(color: AppColors.navyBlue, strokeWidth: 2),
+                      )
+                    else
+                      const Icon(Icons.cloud_upload_rounded, color: AppColors.navyBlue, size: 18),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Save It',
+                      style: TextStyle(
+                        fontFamily: 'DynaPuff',
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.navyBlue,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
       ],
     );
+  }
+
+  void _registerProfile() async {
+    if (_nameController.text.trim().isEmpty) {
+      _showNameWarningDialog();
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    // Save locally first
+    await _savePlayerNickname();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('player_icon', _selectedIcon);
+
+    // Register online via Vercel
+    final success = await WebRTCSignalingManager.instance.registerPlayerProfile();
+
+    setState(() => _isSaving = false);
+
+    if (!mounted) return;
+
+    if (success) {
+      FunkySuccessDialog.show(
+        context,
+        title: "Profile Synced!",
+        message: "Your nickname and funky icon are now live in the multiplayer arena cloud database!",
+      );
+    } else {
+      FunkyErrorDialog.show(
+        context,
+        title: "Sync Failed!",
+        message: "Could not push your profile details online. Please check your internet connection and try again!",
+      );
+    }
   }
 
   Widget _buildModeSelection() {

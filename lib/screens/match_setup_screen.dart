@@ -10,6 +10,7 @@ import '../utils/board_generator.dart';
 import '../widgets/funky_loader_dialog.dart';
 import '../widgets/funky_lobby_details_dialog.dart';
 import 'peers_play_screen.dart';
+import '../utils/webrtc_signaling_manager.dart';
 
 class MatchSetupScreen extends StatefulWidget {
   final bool isCompeteMode;
@@ -48,11 +49,15 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
         _boardSources[i] = 'auto';
       }
     }
+    // Start mailbox polling dynamically when entering match setup screen
+    WebRTCSignalingManager.instance.startMailboxPolling();
   }
 
   @override
   void dispose() {
     _opponentIdController.dispose();
+    // Stop mailbox polling when user leaves match setup screen
+    WebRTCSignalingManager.instance.stopMailboxPolling();
     super.dispose();
   }
 
@@ -82,7 +87,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
     }
   }
 
-  void _startMatch() {
+  void _startMatch() async {
     final opponentId = _opponentIdController.text.trim();
     if (opponentId.isEmpty) {
       _showWarningDialog("Who are we fighting?", "Type your opponent's 6-digit Player ID to invite them to the battle session!");
@@ -110,7 +115,43 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
       }
     }
 
-    // Show the gorgeous funky settings notebook binder dialog
+    // --- STEP 1: VALIDATE PEER ID EXISTENCE ---
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (checkCtx) => const Center(
+        child: Card(
+          color: Colors.white,
+          child: Padding(
+            padding: EdgeInsets.all(20.0),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: AppColors.navyBlue),
+                SizedBox(width: 20),
+                Text("Searching Arena for Opponent...", style: TextStyle(fontFamily: 'DynaPuff', color: AppColors.navyBlue)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final peerProfile = await WebRTCSignalingManager.instance.checkPeerValid(opponentId);
+    
+    if (mounted) {
+      Navigator.pop(context); // Close search dialog
+    }
+
+    if (peerProfile == null) {
+      _showWarningDialog(
+        "Opponent Not Found!", 
+        "Player ID 'NQ-$opponentId' does not exist in our arena database!\n\nMake sure the ID is correct and they have launched the app at least once to register."
+      );
+      return;
+    }
+
+    // --- STEP 2: SHOW LOBBY CONFIRMATION ---
     showDialog(
       context: context,
       barrierDismissible: true,
@@ -126,150 +167,160 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
         onConfirm: () async {
           Navigator.pop(dialogCtx); // close confirmation dialog
           
-          // Generate boards for each match if Auto Generate is selected!
-          final List<BoardData?> generatedBoards = [];
-          bool success = true;
-          bool cancelled = false;
-
-          // Show the premium funky Lottie cat loading transmission lobby popup!
+          final List<BoardData> validMatchBoards = [];
+          
+          // Show board weaving dialog
           showDialog(
             context: context,
             barrierDismissible: false,
-            builder: (loaderCtx) => FunkyLoaderDialog(
-              title: widget.isCompeteMode ? "TRANSMITTING COMPETE..." : "TRANSMITTING CO-OP...",
-              statusSteps: widget.isCompeteMode 
-                ? [
-                    "Weaving solvable board series...",
-                    "Arena opponent NQ-$opponentId located! 📍",
-                    "Locking board templates... 🔒",
-                    "Waiting for NQ-$opponentId to accept... ⏳",
-                  ]
-                : [
-                    "Weaving solvable board series...",
-                    "Lobby NQ-$opponentId located! 📍",
-                    "Syncing puzzle blueprints... 🔄",
-                    "Waiting for NQ-$opponentId to accept... ⏳",
-                  ],
-              cancelLabel: "CANCEL INVITE",
-              onCancel: () {
-                cancelled = true;
-                Navigator.pop(loaderCtx); // close loader
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    backgroundColor: Colors.redAccent,
-                    content: Text(
-                      "Multiplayer invite cancelled!",
-                      style: TextStyle(fontFamily: 'Comfortaa', fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
+            builder: (weaveCtx) => const Center(
+              child: Card(
+                color: Colors.white,
+                child: Padding(
+                  padding: EdgeInsets.all(20.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(color: AppColors.navyBlue),
+                      SizedBox(height: 15),
+                      Text("Weaving Solvable Puzzles...", style: TextStyle(fontFamily: 'DynaPuff', color: AppColors.navyBlue)),
+                    ],
                   ),
-                );
-              },
-              onComplete: () async {
-                if (cancelled) return;
-                Navigator.pop(loaderCtx); // close loader
-
-                // Trigger solvable board series generation
-                try {
-                  for (int i = 0; i < _matchCount; i++) {
-                    if (_boardSources[i] == 'auto') {
-                      final board = await BoardGenerator.generateUniqueBoard(_selectedSizes[i]);
-                      generatedBoards.add(board);
-                      if (board == null) success = false;
-                    } else {
-                      generatedBoards.add(null);
-                    }
-                  }
-                } catch (e) {
-                  debugPrint("Error generating board series: $e");
-                  success = false;
-                }
-
-                if (context.mounted) {
-                  // Show funky success confirmation dialog
-                  showDialog(
-                    context: context,
-                    builder: (successCtx) => AlertDialog(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        side: const BorderSide(color: AppColors.navyBlue, width: 3),
-                      ),
-                      backgroundColor: widget.isCompeteMode ? const Color(0xFFFFEBEE) : const Color(0xFFE8F5E9), // Red vs Green success theme!
-                      title: Row(
-                        children: [
-                          Icon(
-                            Icons.sports_esports_rounded, 
-                            color: widget.isCompeteMode ? Colors.redAccent.shade700 : Colors.green.shade700, 
-                            size: 28,
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            widget.isCompeteMode ? "DUEL ACTIVE!" : "CONNECTION LIVE!",
-                            style: TextStyle(
-                              fontFamily: 'DynaPuff', 
-                              fontWeight: FontWeight.bold, 
-                              fontSize: 18, 
-                              color: widget.isCompeteMode ? Colors.redAccent.shade700 : Colors.green.shade700,
-                            ),
-                          ),
-                        ],
-                      ),
-                      content: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            "SUCCESS!",
-                            style: TextStyle(fontFamily: 'DynaPuff', fontSize: 14, color: AppColors.navyBlue, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            widget.isCompeteMode 
-                              ? "NQ-$opponentId accepted the compete battle contract! Weaving generated puzzle duels."
-                              : "NQ-$opponentId accepted the lobby contract! Weaving solved blueprints is fully complete.",
-                            style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 13, color: AppColors.darkText, height: 1.4),
-                          ),
-                        ],
-                      ),
-                      actions: [
-                        ElevatedButton(
-                          onPressed: () {
-                            Navigator.pop(successCtx);
-                            
-                            // Map all generated/selected boards to a list of valid BoardData
-                            final List<BoardData> validMatchBoards = [];
-                            for (var board in generatedBoards) {
-                              if (board != null) {
-                                validMatchBoards.add(board);
-                              }
-                            }
-
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => PeersPlayScreen(
-                                  isCompeteMode: widget.isCompeteMode,
-                                  opponentId: opponentId,
-                                  playerColor: _selectedColor!,
-                                  matchCount: _matchCount,
-                                  matchBoards: validMatchBoards,
-                                ),
-                              ),
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.navyBlue,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                          ),
-                          child: const Text("ENTER ARENA", style: TextStyle(fontFamily: 'DynaPuff')),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-              },
+                ),
+              ),
             ),
           );
+
+          try {
+            for (int i = 0; i < _matchCount; i++) {
+              if (_boardSources[i] == 'auto') {
+                final board = await BoardGenerator.generateUniqueBoard(_selectedSizes[i]);
+                if (board != null) {
+                  validMatchBoards.add(board);
+                }
+              } else if (_boardSources[i] == 'library' && _selectedLibraryBoards[i] != null) {
+                validMatchBoards.add(_selectedLibraryBoards[i]!['board'] as BoardData);
+              }
+            }
+          } catch (e) {
+            debugPrint("Error generating board series: $e");
+          }
+
+          if (mounted) {
+            Navigator.pop(context); // Close weave dialog
+          }
+
+          if (validMatchBoards.length < _matchCount) {
+            _showWarningDialog("Generation Failed", "Failed to generate solvable boards. Please try again.");
+            return;
+          }
+
+          // --- STEP 3: ESTABLISH WebRTC CONNECTION ---
+          bool connectionEstablished = false;
+          void Function()? connListener;
+          
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (loaderCtx) {
+              connListener = () {
+                final state = WebRTCSignalingManager.instance.connectionState.value;
+                if (state == 'connected' && !connectionEstablished) {
+                  connectionEstablished = true;
+                  WebRTCSignalingManager.instance.connectionState.removeListener(connListener!);
+                  
+                  Navigator.pop(loaderCtx); // pop loader dialog
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: Colors.green,
+                      content: Text(
+                        widget.isCompeteMode ? "DUEL ACTIVE! WebRTC established." : "LOBBY CONNECTED! Co-op synchronized.",
+                        style: const TextStyle(fontFamily: 'Comfortaa', fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ),
+                  );
+
+                  // Transition AUTOMATICALLY directly to PeersPlayScreen without asking manual confirmation
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => PeersPlayScreen(
+                        isCompeteMode: widget.isCompeteMode,
+                        opponentId: opponentId,
+                        playerColor: _selectedColor!,
+                        matchCount: _matchCount,
+                        matchBoards: validMatchBoards,
+                      ),
+                    ),
+                  );
+                } else if (state == 'failed') {
+                  WebRTCSignalingManager.instance.connectionState.removeListener(connListener!);
+                  Navigator.pop(loaderCtx);
+                  WebRTCSignalingManager.instance.disconnect();
+                  _showWarningDialog("Connection Failed", "Failed to establish connection with opponent. They might have declined or timed out.");
+                }
+              };
+              
+              WebRTCSignalingManager.instance.connectionState.addListener(connListener!);
+
+              return FunkyLoaderDialog(
+                title: widget.isCompeteMode ? "TRANSMITTING COMPETE..." : "TRANSMITTING CO-OP...",
+                statusSteps: widget.isCompeteMode 
+                  ? const [
+                      "Locking board templates... ",
+                      "Transmitting Duel Invite... ",
+                      "Waiting for opponent to accept... ",
+                      "Connecting peer-to-peer WebRTC... ",
+                    ]
+                  : const [
+                      "Syncing puzzle blueprints... ",
+                      "Transmitting Lobby Invite... ",
+                      "Waiting for partner to accept... ",
+                      "Connecting peer-to-peer WebRTC... ",
+                    ],
+                cancelLabel: "CANCEL INVITE",
+                totalDuration: const Duration(minutes: 5), // Wait until connection or cancel
+                stepDuration: const Duration(seconds: 3),
+                onComplete: () {}, // Handled by manual listener instead
+                onCancel: () {
+                  if (connListener != null) {
+                    WebRTCSignalingManager.instance.connectionState.removeListener(connListener!);
+                  }
+                  WebRTCSignalingManager.instance.disconnect();
+                  Navigator.pop(loaderCtx); // close loader
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      backgroundColor: Colors.redAccent,
+                      content: Text(
+                        "Multiplayer invite cancelled!",
+                        style: TextStyle(fontFamily: 'Comfortaa', fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          );
+
+          // Launch host WebRTC session
+          try {
+            await WebRTCSignalingManager.instance.hostConnection(
+              opponentId,
+              widget.isCompeteMode,
+              _matchCount,
+              validMatchBoards,
+            );
+          } catch (e) {
+            if (connListener != null) {
+              try {
+                WebRTCSignalingManager.instance.connectionState.removeListener(connListener!);
+              } catch (_) {}
+            }
+            Navigator.pop(context); // Dismiss loading if open
+            WebRTCSignalingManager.instance.disconnect();
+            _showWarningDialog("Invite Failed", e.toString());
+          }
         },
       ),
     );

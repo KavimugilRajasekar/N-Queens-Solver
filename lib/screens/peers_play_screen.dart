@@ -7,6 +7,7 @@ import '../constants/colors.dart';
 import '../widgets/notebook_painter.dart';
 import '../utils/board_processor.dart';
 import '../constants/region_colors.dart';
+import '../utils/webrtc_signaling_manager.dart';
 
 class PeersPlayScreen extends StatefulWidget {
   final bool isCompeteMode;
@@ -58,10 +59,18 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
   String _playerNickname = "YOU"; // default player name
   String _opponentNickname = "PARTNER"; // default partner name
 
+  StreamSubscription? _webrtcSubscription;
+
   @override
   void initState() {
     super.initState();
     _loadPlayerIcons();
+    
+    // Subscribe to WebRTC P2P Data Channel Events
+    _webrtcSubscription = WebRTCSignalingManager.instance.dataMessageStream.listen((data) {
+      _handleWebRTCMessage(data);
+    });
+
     _startNewMatchRound(_currentMatchIndex);
   }
 
@@ -79,30 +88,11 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
         _playerNickname = storedName;
       });
     }
-    // Randomize partner nickname based on opponentId so it stays consistent
-    final funkyNames = [
-      "PixelQueen", "ChronoSolve", "BinaryKnight", "Algorist", 
-      "NeonPuzzler", "RetroRook", "AlphaSolver", "DeltaByte"
-    ];
-    final int seed = widget.opponentId.hashCode;
+    
+    // Load Opponent nickname and icon from WebRTCSignalingManager
     setState(() {
-      _opponentNickname = funkyNames[seed.abs() % funkyNames.length];
-    });
-
-    // Randomize partner icon from the list of icons so they look different and fun!
-    final icons = [
-      'assets/player_icons/unicorn.png',
-      'assets/player_icons/dinosaur.png',
-      'assets/player_icons/alien.png',
-      'assets/player_icons/startup.png',
-      'assets/player_icons/diamond.png',
-      'assets/player_icons/torch.png',
-      'assets/player_icons/pizza.png',
-      'assets/player_icons/cat.png',
-      'assets/player_icons/kitty.png',
-    ];
-    setState(() {
-      _opponentIconPath = icons[Random().nextInt(icons.length)];
+      _opponentNickname = WebRTCSignalingManager.instance.activePeerNickname ?? "RIVAL";
+      _opponentIconPath = WebRTCSignalingManager.instance.activePeerIcon ?? 'assets/player_icons/unicorn.png';
     });
   }
 
@@ -110,10 +100,12 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
   void dispose() {
     _gameTimer?.cancel();
     _mockOpponentActionTimer?.cancel();
+    _webrtcSubscription?.cancel();
+    WebRTCSignalingManager.instance.disconnect(); // Clean up WebRTC session
     super.dispose();
   }
 
-  // Set up board and simulator for the current round index
+  // Set up board and WebRTC state for the current round index
   void _startNewMatchRound(int matchIdx) {
     if (matchIdx >= widget.matchBoards.length) {
       setState(() => _isSeriesOver = true);
@@ -125,7 +117,7 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
     _secondsElapsed = 0;
     _latestActivityLog = "Round ${matchIdx + 1} started! Solve the board.";
     _mockOpponentQueensPlaced = 0;
-    _opponentStatus = "Analyzing regions... 🤔";
+    _opponentStatus = widget.isCompeteMode ? "Solving... 🧠" : "Active & Synchronized! 🔗";
 
     // 1. Start game timer
     _gameTimer?.cancel();
@@ -136,9 +128,77 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
         });
       }
     });
+  }
 
-    // 2. Start mock opponent simulation (commented out backend replacement)
-    _startMockOpponentSimulation();
+  // Handle real-time WebRTC messages from peer
+  void _handleWebRTCMessage(Map<String, dynamic> data) {
+    if (!mounted) return;
+    final String? type = data['type'];
+    if (type == null) return;
+
+    switch (type) {
+      case 'cell_tap':
+        if (!widget.isCompeteMode) {
+          final int r = data['row'];
+          final int c = data['col'];
+          final int val = data['val'];
+          final String owner = data['player'];
+          final String key = "$r,$c";
+
+          setState(() {
+            if (val == 0) {
+              _gameGrid.remove(key);
+            } else {
+              _gameGrid[key] = {
+                'value': val,
+                'player': owner,
+              };
+            }
+            _latestActivityLog = val == 2 
+              ? "Partner $_opponentNickname placed a Queen at [${r + 1}, ${c + 1}]!"
+              : val == 1 
+                ? "Partner $_opponentNickname marked [${r + 1}, ${c + 1}] with X."
+                : "Partner $_opponentNickname cleared cell [${r + 1}, ${c + 1}].";
+          });
+          _checkCoopWinCondition();
+        }
+        break;
+
+      case 'clear_board':
+        if (!widget.isCompeteMode) {
+          setState(() {
+            _gameGrid.clear();
+            _latestActivityLog = "Partner $_opponentNickname cleared the board!";
+          });
+        }
+        break;
+
+      case 'progress':
+        if (widget.isCompeteMode) {
+          final int count = data['queensPlaced'];
+          setState(() {
+            _mockOpponentQueensPlaced = count;
+            if (count < _currentBoard.size) {
+              _opponentStatus = "Placing Queens... 👑 ($count/${_currentBoard.size})";
+              _latestActivityLog = "Opponent $_opponentNickname placed a Queen!";
+            } else {
+              _opponentStatus = "Solved! 🎉";
+              _latestActivityLog = "Opponent $_opponentNickname solved the board!";
+            }
+          });
+        }
+        break;
+
+      case 'round_over':
+        if (widget.isCompeteMode) {
+          final String winner = data['winner'];
+          if (winner == 'me') {
+            _gameTimer?.cancel();
+            _handleRoundEnded(winner: 'opponent');
+          }
+        }
+        break;
+    }
   }
 
   void _startMockOpponentSimulation() {
@@ -236,8 +296,23 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
           ? "You marked cell [${r + 1}, ${c + 1}] with X."
           : "You cleared cell [${r + 1}, ${c + 1}].";
       
-      // Update real-time database or socket here (production-ready commented stub)
-      _emitRealtimeMoveToSocket(r, c, newValue, playerColor);
+      // Update real-time peer device over WebRTC
+      if (!widget.isCompeteMode) {
+        WebRTCSignalingManager.instance.sendMessage({
+          "type": "cell_tap",
+          "row": r,
+          "col": c,
+          "val": newValue,
+          "player": playerColor,
+        });
+      } else {
+        // In compete mode, broadcast progress update showing number of queens placed
+        int queensCount = _gameGrid.values.where((cell) => cell['value'] == 2 && cell['player'] == playerColor).length;
+        WebRTCSignalingManager.instance.sendMessage({
+          "type": "progress",
+          "queensPlaced": queensCount,
+        });
+      }
     });
 
     if (widget.isCompeteMode) {
@@ -250,8 +325,14 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
   // Checks win condition for Independent Compete Mode
   void _checkCompeteWinCondition() {
     if (_hasSolvedBoardCorrectly()) {
-      _mockOpponentActionTimer?.cancel();
       _gameTimer?.cancel();
+      
+      // Signal win to opponent
+      WebRTCSignalingManager.instance.sendMessage({
+        "type": "round_over",
+        "winner": "me",
+      });
+
       _handleRoundEnded(winner: 'player');
     }
   }
@@ -259,8 +340,14 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
   // Checks win condition for Collaborative Shared Co-op Mode
   void _checkCoopWinCondition() {
     if (_hasSolvedBoardCorrectly()) {
-      _mockOpponentActionTimer?.cancel();
       _gameTimer?.cancel();
+      
+      // Signal Co-op win to sync both screens instantly
+      WebRTCSignalingManager.instance.sendMessage({
+        "type": "round_over",
+        "winner": "coop",
+      });
+
       _handleRoundEnded(winner: 'coop');
     }
   }
@@ -524,6 +611,18 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
     setState(() {
       _gameGrid.clear();
       _latestActivityLog = "Active board template cleared!";
+      
+      // Update peer device over WebRTC
+      if (!widget.isCompeteMode) {
+        WebRTCSignalingManager.instance.sendMessage({
+          "type": "clear_board",
+        });
+      } else {
+        WebRTCSignalingManager.instance.sendMessage({
+          "type": "progress",
+          "queensPlaced": 0,
+        });
+      }
     });
   }
 
@@ -1067,29 +1166,55 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
 
   Widget _buildGameplayControls() {
     if (!widget.isCompeteMode) {
-      // Combine Solving Mode: Only show end game
+      // Co-op Sync Mode: Show both CLEAR BOARD and END GAME next to each other
       return Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          // Clear Active Board
           GestureDetector(
-            onTap: _showExitConfirmation,
+            onTap: _clearActiveBoard,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
               decoration: BoxDecoration(
-                color: Colors.redAccent,
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: AppColors.navyBlue, width: 2.5),
-                boxShadow: const [BoxShadow(color: AppColors.navyBlue, offset: Offset(3, 3))],
+                border: Border.all(color: AppColors.navyBlue, width: 2),
+                boxShadow: const [BoxShadow(color: AppColors.navyBlue, offset: Offset(2, 2))],
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.power_settings_new_rounded, size: 18, color: Colors.white),
-                  SizedBox(width: 8),
+                  Icon(Icons.cleaning_services_rounded, size: 16, color: AppColors.navyBlue),
+                  SizedBox(width: 6),
+                  Text(
+                    "CLEAR BOARD",
+                    style: TextStyle(fontFamily: 'DynaPuff', fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 15),
+
+          // End Game button
+          GestureDetector(
+            onTap: _showExitConfirmation,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.redAccent,
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: AppColors.navyBlue, width: 2),
+                boxShadow: const [BoxShadow(color: AppColors.navyBlue, offset: Offset(2, 2))],
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.power_settings_new_rounded, size: 16, color: Colors.white),
+                  SizedBox(width: 6),
                   Text(
                     "END GAME",
                     style: TextStyle(
                       fontFamily: 'DynaPuff', 
-                      fontSize: 13, 
+                      fontSize: 11, 
                       fontWeight: FontWeight.bold, 
                       color: Colors.white,
                     ),

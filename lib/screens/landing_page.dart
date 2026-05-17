@@ -10,6 +10,8 @@ import 'package:lottie/lottie.dart';
 import '../utils/board_processor.dart';
 import '../utils/shortcut_manager.dart';
 import 'compete_mode_screen.dart';
+import '../utils/webrtc_signaling_manager.dart';
+import 'peers_play_screen.dart';
 
 class LandingPage extends StatefulWidget {
   final List<CameraDescription> cameras;
@@ -31,6 +33,168 @@ class _LandingPageState extends State<LandingPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AppShortcutManager.init(context, widget.cameras);
     });
+    
+    // Register invite listener
+    WebRTCSignalingManager.instance.incomingInviteNotifier.addListener(_handleIncomingInviteListener);
+    
+    // Process any pending invite loaded during startup/boot phase immediately
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (WebRTCSignalingManager.instance.incomingInviteNotifier.value != null) {
+        _handleIncomingInviteListener();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    WebRTCSignalingManager.instance.incomingInviteNotifier.removeListener(_handleIncomingInviteListener);
+    super.dispose();
+  }
+
+  void _handleIncomingInviteListener() {
+    final invite = WebRTCSignalingManager.instance.incomingInviteNotifier.value;
+    if (invite == null) return;
+    
+    // Reset the value so we don't trigger multiple popups
+    WebRTCSignalingManager.instance.incomingInviteNotifier.value = null;
+
+    if (!mounted) return;
+
+    final isCompete = invite['isCompeteMode'] == true;
+    final rivalName = invite['fromNickname'];
+    final matchCount = invite['matchCount'];
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(25),
+          side: const BorderSide(color: AppColors.navyBlue, width: 3),
+        ),
+        backgroundColor: isCompete ? const Color(0xFFFFEBEE) : const Color(0xFFE8F5E9),
+        title: Row(
+          children: [
+            Icon(
+              isCompete ? Icons.sports_esports_rounded : Icons.group_work_rounded,
+              color: isCompete ? Colors.redAccent.shade700 : Colors.green.shade700,
+              size: 28,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              isCompete ? "DUEL CHALLENGE!" : "CO-OP SYNC CHALLENGE!",
+              style: TextStyle(
+                fontFamily: 'DynaPuff',
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: isCompete ? Colors.redAccent.shade700 : Colors.green.shade700,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "INCOMING CHALLENGE",
+              style: TextStyle(fontFamily: 'DynaPuff', fontSize: 12, color: AppColors.navyBlue, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Player '$rivalName' has invited you to a ${isCompete ? 'Compete Duel' : 'Co-op Sync'} series ($matchCount ${matchCount == 1 ? 'Match' : 'Matches'}).\n\nDo you want to accept and connect?",
+              style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 13, color: AppColors.darkText, height: 1.4),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogCtx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  backgroundColor: Colors.redAccent,
+                  content: Text(
+                    "Challenge declined!",
+                    style: TextStyle(fontFamily: 'Comfortaa', fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                ),
+              );
+            },
+            child: const Text("DECLINE", style: TextStyle(fontFamily: 'DynaPuff', color: Colors.redAccent)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(dialogCtx);
+
+              // Reconstruct boards
+              final boards = WebRTCSignalingManager.deserializeBoards(invite['matchBoards']);
+
+              // Show loading dialog
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (loadCtx) => const Center(
+                  child: Card(
+                    color: Colors.white,
+                    child: Padding(
+                      padding: EdgeInsets.all(20.0),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(color: AppColors.navyBlue),
+                          SizedBox(height: 15),
+                          Text("Connecting WebRTC...", style: TextStyle(fontFamily: 'DynaPuff', color: AppColors.navyBlue)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+
+              try {
+                // Initialize Joiner Connection
+                await WebRTCSignalingManager.instance.joinConnection(invite);
+                
+                if (mounted) {
+                  Navigator.pop(context); // Dismiss loading dialog
+
+                  // Navigate to play screen
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => PeersPlayScreen(
+                        isCompeteMode: isCompete,
+                        opponentId: invite['fromPlayerId'],
+                        playerColor: isCompete ? 'red' : 'green', // Host gets blue, Joiner gets red/green
+                        matchCount: matchCount,
+                        matchBoards: boards,
+                      ),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  Navigator.pop(context); // Dismiss loading dialog
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: Colors.redAccent,
+                      content: Text("Failed to connect via WebRTC: $e"),
+                    ),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.navyBlue,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            ),
+            child: const Text("ACCEPT & PLAY", style: TextStyle(fontFamily: 'DynaPuff')),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadStats() async {

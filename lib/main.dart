@@ -3,8 +3,14 @@ import 'package:camera/camera.dart';
 import 'constants/colors.dart';
 import 'screens/landing_page.dart';
 
+import 'utils/webrtc_signaling_manager.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize WebRTC and Firebase Messaging
+  final signalingManager = WebRTCSignalingManager.instance;
+  await signalingManager.initializeFirebase();
   
   // Obtain a list of the available cameras on the device.
   final cameras = await availableCameras();
