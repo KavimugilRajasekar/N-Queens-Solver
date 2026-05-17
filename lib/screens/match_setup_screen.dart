@@ -10,14 +10,16 @@ import '../utils/board_generator.dart';
 import '../widgets/funky_loader_dialog.dart';
 import '../widgets/funky_lobby_details_dialog.dart';
 
-class CombineSolvingScreen extends StatefulWidget {
-  const CombineSolvingScreen({super.key});
+class MatchSetupScreen extends StatefulWidget {
+  final bool isCompeteMode;
+
+  const MatchSetupScreen({super.key, required this.isCompeteMode});
 
   @override
-  State<CombineSolvingScreen> createState() => _CombineSolvingScreenState();
+  State<MatchSetupScreen> createState() => _MatchSetupScreenState();
 }
 
-class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
+class _MatchSetupScreenState extends State<MatchSetupScreen> {
   final TextEditingController _opponentIdController = TextEditingController();
   
   // Selection states
@@ -39,6 +41,12 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
   void initState() {
     super.initState();
     _loadMasteredBoards();
+    // In Compete Mode, Library is forbidden, so force auto-generate configuration
+    if (widget.isCompeteMode) {
+      for (int i = 0; i < 5; i++) {
+        _boardSources[i] = 'auto';
+      }
+    }
   }
 
   @override
@@ -48,6 +56,7 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
   }
 
   Future<void> _loadMasteredBoards() async {
+    if (widget.isCompeteMode) return; // Skip loading library boards in Compete Mode
     setState(() => _isLoadingLibrary = true);
     try {
       final allBoards = await StorageManager.loadBoards();
@@ -72,10 +81,10 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
     }
   }
 
-  void _startCombineSolving() {
+  void _startMatch() {
     final opponentId = _opponentIdController.text.trim();
     if (opponentId.isEmpty) {
-      _showWarningDialog("Who are we fighting?", "Type your opponent's 6-digit Player ID to invite them to the solve session!");
+      _showWarningDialog("Who are we fighting?", "Type your opponent's 6-digit Player ID to invite them to the battle session!");
       return;
     }
     if (opponentId.length < 4) {
@@ -100,6 +109,7 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
       context: context,
       barrierDismissible: true,
       builder: (dialogCtx) => FunkyLobbyDetailsDialog(
+        title: widget.isCompeteMode ? "BATTLE DECK" : "CO-OP BOARD",
         opponentId: opponentId,
         playerColor: _selectedColor!,
         matchCount: _matchCount,
@@ -120,13 +130,20 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
             context: context,
             barrierDismissible: false,
             builder: (loaderCtx) => FunkyLoaderDialog(
-              title: "TRANSMITTING CO-OP...",
-              statusSteps: [
-                "Weaving solvable board series...",
-                "Lobby NQ-$opponentId located! 📍",
-                "Syncing puzzle blueprints... 🔄",
-                "Waiting for NQ-$opponentId to accept... ⏳",
-              ],
+              title: widget.isCompeteMode ? "TRANSMITTING COMPETE..." : "TRANSMITTING CO-OP...",
+              statusSteps: widget.isCompeteMode 
+                ? [
+                    "Weaving solvable board series...",
+                    "Arena opponent NQ-$opponentId located! 📍",
+                    "Locking board templates... 🔒",
+                    "Waiting for NQ-$opponentId to accept... ⏳",
+                  ]
+                : [
+                    "Weaving solvable board series...",
+                    "Lobby NQ-$opponentId located! 📍",
+                    "Syncing puzzle blueprints... 🔄",
+                    "Waiting for NQ-$opponentId to accept... ⏳",
+                  ],
               cancelLabel: "CANCEL INVITE",
               onCancel: () {
                 cancelled = true;
@@ -171,13 +188,13 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
                         side: const BorderSide(color: AppColors.navyBlue, width: 3),
                       ),
                       backgroundColor: const Color(0xFFF1F8E9), // Mint Green
-                      title: const Row(
+                      title: Row(
                         children: [
-                          Icon(Icons.sports_esports_rounded, color: AppColors.navyBlue, size: 28),
-                          SizedBox(width: 10),
+                          const Icon(Icons.sports_esports_rounded, color: AppColors.navyBlue, size: 28),
+                          const SizedBox(width: 10),
                           Text(
-                            "CONNECTION LIVE!",
-                            style: TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.navyBlue),
+                            widget.isCompeteMode ? "DUEL ACTIVE!" : "CONNECTION LIVE!",
+                            style: const TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.navyBlue),
                           ),
                         ],
                       ),
@@ -191,7 +208,9 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            "NQ-$opponentId accepted the lobby contract! Weaving solved blueprints is fully complete.",
+                            widget.isCompeteMode 
+                              ? "NQ-$opponentId accepted the compete battle contract! Weaving generated puzzle duels."
+                              : "NQ-$opponentId accepted the lobby contract! Weaving solved blueprints is fully complete.",
                             style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 13, color: AppColors.darkText, height: 1.4),
                           ),
                         ],
@@ -337,7 +356,7 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
           ),
         ),
         Text(
-          'Combine Solving',
+          widget.isCompeteMode ? 'Compete Battle' : 'Combine Solving',
           style: Theme.of(context).textTheme.displayLarge?.copyWith(
             fontSize: 32, 
             color: AppColors.darkText,
@@ -390,9 +409,11 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
             ),
             const Divider(color: AppColors.paperLine, thickness: 2),
             const SizedBox(height: 5),
-            const Text(
-              "Type in your partner's game lobby key to link screens for simultaneous solving.",
-              style: TextStyle(fontFamily: 'Comfortaa', fontSize: 11, color: AppColors.secondaryText),
+            Text(
+              widget.isCompeteMode 
+                ? "Type in your rival's game lobby key to link screens for mutual head-to-head compete dueling."
+                : "Type in your partner's game lobby key to link screens for simultaneous co-op solving.",
+              style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 11, color: AppColors.secondaryText),
             ),
           ],
         ),
@@ -593,19 +614,40 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
             ],
 
             // Tab bar options (Auto Generate and My Library)
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.paperLine.withOpacity(0.5),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.navyBlue, width: 1.5),
+            if (widget.isCompeteMode)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.navyBlue,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.center,
+                child: const Text(
+                  'AUTO GENERATED PUZZLES ONLY',
+                  style: TextStyle(
+                    fontFamily: 'DynaPuff',
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 1,
+                  ),
+                ),
+              )
+            else
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.paperLine.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.navyBlue, width: 1.5),
+                ),
+                child: Row(
+                  children: [
+                    _buildSourceTab('auto', 'Auto Generate'),
+                    _buildSourceTab('library', 'My Library'),
+                  ],
+                ),
               ),
-              child: Row(
-                children: [
-                  _buildSourceTab('auto', 'Auto Generate'),
-                  _buildSourceTab('library', 'My Library'),
-                ],
-              ),
-            ),
             const SizedBox(height: 20),
 
             // Source option display
@@ -919,7 +961,7 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
           alignment: Alignment.center,
           child: Text(
             label,
-            style: TextStyle(
+            style: const TextStyle(
               fontFamily: 'DynaPuff',
               fontSize: 12,
               fontWeight: FontWeight.bold,
@@ -935,7 +977,7 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
     return Transform.rotate(
       angle: -0.02,
       child: GestureDetector(
-        onTap: _startCombineSolving,
+        onTap: _startMatch,
         child: Container(
           width: double.infinity,
           height: 75,
@@ -947,14 +989,14 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
               BoxShadow(color: AppColors.navyBlue, offset: Offset(8, 8)),
             ],
           ),
-          child: const Row(
+          child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.wifi_rounded, size: 30, color: AppColors.navyBlue),
-              SizedBox(width: 15),
+              const Icon(Icons.wifi_rounded, size: 30, color: AppColors.navyBlue),
+              const SizedBox(width: 15),
               Text(
-                'INITIATE SESSION',
-                style: TextStyle(
+                widget.isCompeteMode ? 'INITIATE DUEL' : 'INITIATE SESSION',
+                style: const TextStyle(
                   fontFamily: 'DynaPuff', 
                   fontWeight: FontWeight.bold, 
                   fontSize: 22, 
@@ -969,4 +1011,3 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
     );
   }
 }
-

@@ -4,7 +4,7 @@ import '../widgets/notebook_painter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:io';
-import 'combine_solving_screen.dart';
+import 'match_setup_screen.dart';
 
 class CompeteModeScreen extends StatefulWidget {
   const CompeteModeScreen({super.key});
@@ -369,7 +369,12 @@ class _CompeteModeScreenState extends State<CompeteModeScreen> {
           if (mode == 'combine') {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const CombineSolvingScreen()),
+              MaterialPageRoute(builder: (context) => const MatchSetupScreen(isCompeteMode: false)),
+            );
+          } else if (mode == 'compete') {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const MatchSetupScreen(isCompeteMode: true)),
             );
           }
         },
