@@ -307,23 +307,24 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
                 children: [
                   // Back button sticker
                   Transform.rotate(
-                    angle: -0.05,
+                    angle: 0.05,
                     child: GestureDetector(
                       onTap: () => Navigator.pop(context),
                       child: Container(
-                        padding: const EdgeInsets.all(10),
+                        width: 55,
+                        height: 55,
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.navyBlue, width: 2),
+                          color: const Color(0xFFE3F2FD),
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(color: AppColors.navyBlue, width: 2.5),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.navyBlue.withOpacity(0.2),
+                              color: AppColors.navyBlue.withOpacity(0.3),
                               offset: const Offset(4, 4),
                             )
                           ],
                         ),
-                        child: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.navyBlue, size: 20),
+                        child: const Icon(Icons.arrow_back_rounded, color: AppColors.navyBlue, size: 28),
                       ),
                     ),
                   ),
