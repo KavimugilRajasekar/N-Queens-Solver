@@ -38,6 +38,7 @@ class WebRTCSignalingManager {
   RTCDataChannel? _dataChannel;
   final List<Map<String, dynamic>> _iceCandidatesQueue = [];
   Timer? _iceCandidatesTimer;
+  final List<RTCIceCandidate> _remoteCandidatesQueue = [];
 
   // Stream controller to broadcast received game messages to PeerPlayScreen
   final StreamController<Map<String, dynamic>> _messageController = StreamController<Map<String, dynamic>>.broadcast();
@@ -309,6 +310,19 @@ class WebRTCSignalingManager {
       if (sdp != null && _peerConnection != null) {
         debugPrint("WebRTC: Received Answer! Setting remote description.");
         await _peerConnection!.setRemoteDescription(RTCSessionDescription(sdp, 'answer'));
+        
+        // Process any queued remote candidates now that the description is set!
+        if (_remoteCandidatesQueue.isNotEmpty) {
+          debugPrint("WebRTC: Processing ${_remoteCandidatesQueue.length} queued remote candidates after setting answer SDP.");
+          for (var candidate in _remoteCandidatesQueue) {
+            try {
+              await _peerConnection!.addCandidate(candidate);
+            } catch (e) {
+              debugPrint("Failed to add queued remote candidate: $e");
+            }
+          }
+          _remoteCandidatesQueue.clear();
+        }
       }
     } else if (type == 'candidate') {
       // Received ICE candidate (Supports both single maps and batched lists!)
@@ -316,10 +330,11 @@ class WebRTCSignalingManager {
       if (candidateStr != null && _peerConnection != null) {
         try {
           final decoded = jsonDecode(candidateStr);
+          final List<RTCIceCandidate> candidatesToProcess = [];
+
           if (decoded is List) {
-            debugPrint("WebRTC: Processing a batch of ${decoded.length} remote ICE candidates!");
             for (var candidateData in decoded) {
-              await _peerConnection!.addCandidate(
+              candidatesToProcess.add(
                 RTCIceCandidate(
                   candidateData['candidate'],
                   candidateData['sdpMid'],
@@ -328,14 +343,24 @@ class WebRTCSignalingManager {
               );
             }
           } else {
-            debugPrint("WebRTC: Processing single remote ICE candidate.");
-            await _peerConnection!.addCandidate(
+            candidatesToProcess.add(
               RTCIceCandidate(
                 decoded['candidate'],
                 decoded['sdpMid'],
                 decoded['sdpMLineIndex'],
               ),
             );
+          }
+
+          final remoteDesc = await _peerConnection!.getRemoteDescription();
+          if (remoteDesc == null) {
+            debugPrint("WebRTC: Remote description is not set yet. Queueing ${candidatesToProcess.length} remote candidates.");
+            _remoteCandidatesQueue.addAll(candidatesToProcess);
+          } else {
+            debugPrint("WebRTC: Processing ${candidatesToProcess.length} remote candidates instantly.");
+            for (var candidate in candidatesToProcess) {
+              await _peerConnection!.addCandidate(candidate);
+            }
           }
         } catch (e) {
           debugPrint("Failed to parse remote ICE candidates: $e");
@@ -522,6 +547,7 @@ class WebRTCSignalingManager {
     _iceCandidatesTimer?.cancel();
     _iceCandidatesTimer = null;
     _iceCandidatesQueue.clear();
+    _remoteCandidatesQueue.clear();
     activePeerId = null;
     activePeerNickname = null;
     activePeerIcon = null;

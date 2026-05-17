@@ -38,6 +38,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
   bool _isLoadingLibrary = false;
   
   int _matchCount = 3; // Default best of 3
+  bool _isConnecting = false;
 
   @override
   void initState() {
@@ -165,6 +166,8 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
         selectedLibraryBoards: _selectedLibraryBoards,
         onCancel: () => Navigator.pop(dialogCtx),
         onConfirm: () async {
+          if (_isConnecting) return;
+          _isConnecting = true;
           Navigator.pop(dialogCtx); // close confirmation dialog
           
           final List<BoardData> validMatchBoards = [];
@@ -255,6 +258,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                     ),
                   );
                 } else if (state == 'failed') {
+                  _isConnecting = false;
                   WebRTCSignalingManager.instance.connectionState.removeListener(connListener!);
                   Navigator.pop(loaderCtx);
                   WebRTCSignalingManager.instance.disconnect();
@@ -284,6 +288,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                 stepDuration: const Duration(seconds: 3),
                 onComplete: () {}, // Handled by manual listener instead
                 onCancel: () {
+                  _isConnecting = false;
                   if (connListener != null) {
                     WebRTCSignalingManager.instance.connectionState.removeListener(connListener!);
                   }
@@ -312,6 +317,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
               validMatchBoards,
             );
           } catch (e) {
+            _isConnecting = false;
             if (connListener != null) {
               try {
                 WebRTCSignalingManager.instance.connectionState.removeListener(connListener!);
