@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
+import 'dart:async';
 import '../constants/colors.dart';
 import '../widgets/notebook_painter.dart';
 import '../utils/storage_manager.dart';
 import '../utils/board_processor.dart';
 import '../constants/region_colors.dart';
 import '../utils/board_generator.dart';
+import '../widgets/funky_loader_dialog.dart';
+import '../widgets/funky_lobby_details_dialog.dart';
 
 class CombineSolvingScreen extends StatefulWidget {
   const CombineSolvingScreen({super.key});
@@ -91,126 +95,57 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
       }
     }
 
-    // Prepare battle parameters
-    final List<Map<String, dynamic>> matchesConfig = List.generate(_matchCount, (i) {
-      return {
-        'matchIndex': i + 1,
-        'boardSource': _boardSources[i],
-        'boardSize': _boardSources[i] == 'auto' 
-            ? '${_selectedSizes[i]}x${_selectedSizes[i]}' 
-            : (_selectedLibraryBoards[i]!['board'] as BoardData).size,
-        'selectedLibraryBoardId': _boardSources[i] == 'library' ? _selectedLibraryBoards[i]!['id'] : null,
-      };
-    });
-
-    final Map<String, dynamic> sessionDetails = {
-      'opponentId': opponentId,
-      'playerColor': _selectedColor,
-      'matchCount': _matchCount,
-      'matches': matchesConfig,
-    };
-
-    // Show a funky co-op initiation popup
+    // Show the gorgeous funky settings notebook binder dialog
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(25),
-          side: const BorderSide(color: AppColors.navyBlue, width: 3),
-        ),
-        backgroundColor: Colors.white,
-        title: const Row(
-          children: [
-            Icon(Icons.wifi_tethering_rounded, color: AppColors.navyBlue, size: 28),
-            SizedBox(width: 10),
-            Text(
-              "Initiating Solving!",
-              style: TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 20, color: AppColors.navyBlue),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Inviting Player: NQ-$opponentId",
-              style: const TextStyle(fontFamily: 'Comfortaa', fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.navyBlue),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              "You are playing as: ${_selectedColor!.toUpperCase()}",
-              style: TextStyle(
-                fontFamily: 'Comfortaa', 
-                fontWeight: FontWeight.bold, 
-                fontSize: 14, 
-                color: _selectedColor == 'blue' ? Colors.blue : Colors.red
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              "Matches Settings:",
-              style: TextStyle(fontFamily: 'DynaPuff', fontSize: 12, color: AppColors.navyBlue, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 6),
-            ...List.generate(_matchCount, (i) {
-              final src = _boardSources[i];
-              final size = src == 'auto' ? "${_selectedSizes[i]}x${_selectedSizes[i]}" : "Library";
-              final name = src == 'library' ? "\"${_selectedLibraryBoards[i]!['name']}\"" : "";
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 6.0),
-                child: Text(
-                  "✦ Match ${i + 1}: ${src == 'auto' ? 'Auto Generate ($size)' : 'Library $name'}",
-                  style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 12, color: AppColors.darkText),
-                ),
-              );
-            }),
-            const SizedBox(height: 10),
-            Text(
-              "Match Mode: Best of $_matchCount Matches",
-              style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 12, color: AppColors.secondaryText),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("CANCEL", style: TextStyle(fontFamily: 'DynaPuff', color: AppColors.secondaryText)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              
-              // Generate boards for each match if Auto Generate is selected!
-              final List<BoardData?> generatedBoards = [];
-              bool success = true;
-              
-              if (_boardSources.sublist(0, _matchCount).contains('auto')) {
-                // Show a funky progress loader
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (context) => AlertDialog(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      side: const BorderSide(color: AppColors.navyBlue, width: 3),
-                    ),
-                    backgroundColor: Colors.white,
-                    content: const Row(
-                      children: [
-                        CircularProgressIndicator(color: AppColors.navyBlue),
-                        SizedBox(width: 20),
-                        Expanded(
-                          child: Text(
-                            "Weaving solvable board series...",
-                            style: TextStyle(fontFamily: 'DynaPuff', color: AppColors.navyBlue),
-                          ),
-                        ),
-                      ],
+      barrierDismissible: true,
+      builder: (dialogCtx) => FunkyLobbyDetailsDialog(
+        opponentId: opponentId,
+        playerColor: _selectedColor!,
+        matchCount: _matchCount,
+        boardSources: _boardSources,
+        selectedSizes: _selectedSizes,
+        selectedLibraryBoards: _selectedLibraryBoards,
+        onCancel: () => Navigator.pop(dialogCtx),
+        onConfirm: () async {
+          Navigator.pop(dialogCtx); // close confirmation dialog
+          
+          // Generate boards for each match if Auto Generate is selected!
+          final List<BoardData?> generatedBoards = [];
+          bool success = true;
+          bool cancelled = false;
+
+          // Show the premium funky Lottie cat loading transmission lobby popup!
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (loaderCtx) => FunkyLoaderDialog(
+              title: "TRANSMITTING CO-OP...",
+              statusSteps: [
+                "Weaving solvable board series...",
+                "Lobby NQ-$opponentId located! 📍",
+                "Syncing puzzle blueprints... 🔄",
+                "Waiting for NQ-$opponentId to accept... ⏳",
+              ],
+              cancelLabel: "CANCEL INVITE",
+              onCancel: () {
+                cancelled = true;
+                Navigator.pop(loaderCtx); // close loader
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    backgroundColor: Colors.redAccent,
+                    content: Text(
+                      "Multiplayer invite cancelled!",
+                      style: TextStyle(fontFamily: 'Comfortaa', fontWeight: FontWeight.bold, color: Colors.white),
                     ),
                   ),
                 );
-                
+              },
+              onComplete: () async {
+                if (cancelled) return;
+                Navigator.pop(loaderCtx); // close loader
+
+                // Trigger solvable board series generation
                 try {
                   for (int i = 0; i < _matchCount; i++) {
                     if (_boardSources[i] == 'auto') {
@@ -224,36 +159,61 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
                 } catch (e) {
                   debugPrint("Error generating board series: $e");
                   success = false;
-                } finally {
-                  if (context.mounted) {
-                    Navigator.pop(context); // close loader dialog
-                  }
                 }
-              }
 
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor: AppColors.navyBlue,
-                    content: Text(
-                      success 
-                          ? "Generated solvability maps! Connecting to NQ-$opponentId..."
-                          : "Connecting to NQ-$opponentId... Room synchronized!",
-                      style: const TextStyle(fontFamily: 'Comfortaa', fontWeight: FontWeight.bold),
+                if (context.mounted) {
+                  // Show funky success confirmation dialog
+                  showDialog(
+                    context: context,
+                    builder: (successCtx) => AlertDialog(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        side: const BorderSide(color: AppColors.navyBlue, width: 3),
+                      ),
+                      backgroundColor: const Color(0xFFF1F8E9), // Mint Green
+                      title: const Row(
+                        children: [
+                          Icon(Icons.sports_esports_rounded, color: AppColors.navyBlue, size: 28),
+                          SizedBox(width: 10),
+                          Text(
+                            "CONNECTION LIVE!",
+                            style: TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.navyBlue),
+                          ),
+                        ],
+                      ),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            "SUCCESS!",
+                            style: TextStyle(fontFamily: 'DynaPuff', fontSize: 14, color: AppColors.navyBlue, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            "NQ-$opponentId accepted the lobby contract! Weaving solved blueprints is fully complete.",
+                            style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 13, color: AppColors.darkText, height: 1.4),
+                          ),
+                        ],
+                      ),
+                      actions: [
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(successCtx),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.navyBlue,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                          ),
+                          child: const Text("ENTER ARENA", style: TextStyle(fontFamily: 'DynaPuff')),
+                        ),
+                      ],
                     ),
-                  ),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.gold,
-              foregroundColor: AppColors.navyBlue,
-              side: const BorderSide(color: AppColors.navyBlue, width: 2),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  );
+                }
+              },
             ),
-            child: const Text("LET'S GO", style: TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold)),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -1009,3 +969,4 @@ class _CombineSolvingScreenState extends State<CombineSolvingScreen> {
     );
   }
 }
+
