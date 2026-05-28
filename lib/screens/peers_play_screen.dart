@@ -7,7 +7,7 @@ import '../constants/colors.dart';
 import '../widgets/notebook_painter.dart';
 import '../utils/board_processor.dart';
 import '../constants/region_colors.dart';
-import '../utils/webrtc_signaling_manager.dart';
+import '../utils/firebase_game_manager.dart';
 
 class PeersPlayScreen extends StatefulWidget {
   final bool isCompeteMode;
@@ -59,19 +59,61 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
   String _playerNickname = "YOU"; // default player name
   String _opponentNickname = "PARTNER"; // default partner name
 
-  StreamSubscription? _webrtcSubscription;
+  // Guard: prevents _handleRoundEnded from being called twice for the same
+  // round (e.g. local win detection + incoming round_over message arriving
+  // at the same time in co-op mode).
+  bool _roundEndedForCurrentMatch = false;
+
+  StreamSubscription? _gameSubscription;
 
   @override
   void initState() {
     super.initState();
     _loadPlayerIcons();
-    
-    // Subscribe to WebRTC P2P Data Channel Events
-    _webrtcSubscription = WebRTCSignalingManager.instance.dataMessageStream.listen((data) {
+
+    // Subscribe to Firebase RTDB game state events
+    _gameSubscription = FirebaseGameManager.instance.dataMessageStream.listen((data) {
       _handleWebRTCMessage(data);
     });
 
+    // Watch for room deletion — fires when the other player calls disconnect()
+    // which asks the server to hard-delete the room from RTDB.
+    FirebaseGameManager.instance.roomDeletedNotifier.addListener(_handleRoomDeleted);
+
     _startNewMatchRound(_currentMatchIndex);
+  }
+
+  void _handleRoomDeleted() {
+    if (!FirebaseGameManager.instance.roomDeletedNotifier.value) return;
+    if (!mounted) return;
+
+    // Reset the notifier so it doesn't re-fire on the next session
+    FirebaseGameManager.instance.roomDeletedNotifier.value = false;
+
+    // Cancel timers so nothing fires after we leave
+    _gameTimer?.cancel();
+    _mockOpponentActionTimer?.cancel();
+
+    // Show a one-time snackbar then pop back to the lobby
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.redAccent,
+        duration: const Duration(seconds: 3),
+        content: Text(
+          '$_opponentNickname left the game. Returning to lobby...',
+          style: const TextStyle(
+            fontFamily: 'Comfortaa',
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
+
+    // Small delay so the snackbar is visible before the screen pops
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (mounted) Navigator.pop(context);
+    });
   }
 
   Future<void> _loadPlayerIcons() async {
@@ -89,19 +131,20 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
       });
     }
     
-    // Load Opponent nickname and icon from WebRTCSignalingManager
+    // Load Opponent nickname and icon from FirebaseGameManager
     setState(() {
-      _opponentNickname = WebRTCSignalingManager.instance.activePeerNickname ?? "RIVAL";
-      _opponentIconPath = WebRTCSignalingManager.instance.activePeerIcon ?? 'assets/player_icons/unicorn.png';
+      _opponentNickname = FirebaseGameManager.instance.activePeerNickname ?? "RIVAL";
+      _opponentIconPath = FirebaseGameManager.instance.activePeerIcon ?? 'assets/player_icons/unicorn.png';
     });
   }
 
   @override
   void dispose() {
+    FirebaseGameManager.instance.roomDeletedNotifier.removeListener(_handleRoomDeleted);
     _gameTimer?.cancel();
     _mockOpponentActionTimer?.cancel();
-    _webrtcSubscription?.cancel();
-    WebRTCSignalingManager.instance.disconnect(); // Clean up WebRTC session
+    _gameSubscription?.cancel();
+    FirebaseGameManager.instance.disconnect(); // asks server to delete room
     super.dispose();
   }
 
@@ -117,6 +160,7 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
     _secondsElapsed = 0;
     _latestActivityLog = "Round ${matchIdx + 1} started! Solve the board.";
     _mockOpponentQueensPlaced = 0;
+    _roundEndedForCurrentMatch = false; // reset guard for new round
     _opponentStatus = widget.isCompeteMode ? "Solving... 🧠" : "Active & Synchronized! 🔗";
 
     // 1. Start game timer
@@ -130,72 +174,85 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
     });
   }
 
-  // Handle real-time WebRTC messages from peer
+  // Handle real-time Firebase game state messages from peer
   void _handleWebRTCMessage(Map<String, dynamic> data) {
     if (!mounted) return;
     final String? type = data['type'];
     if (type == null) return;
 
     switch (type) {
+
+      // ── CO-OP ONLY: partner placed / removed a marker on the shared board ──
       case 'cell_tap':
         if (!widget.isCompeteMode) {
-          final int r = data['row'];
-          final int c = data['col'];
-          final int val = data['val'];
-          final String owner = data['player'];
-          final String key = "$r,$c";
+          final int r   = data['row']    as int;
+          final int c   = data['col']    as int;
+          final int val = data['val']    as int;
+          final String owner = data['player'] as String;
+          final String key   = '$r,$c';
 
           setState(() {
             if (val == 0) {
               _gameGrid.remove(key);
             } else {
-              _gameGrid[key] = {
-                'value': val,
-                'player': owner,
-              };
+              _gameGrid[key] = {'value': val, 'player': owner};
             }
-            _latestActivityLog = val == 2 
-              ? "Partner $_opponentNickname placed a Queen at [${r + 1}, ${c + 1}]!"
-              : val == 1 
-                ? "Partner $_opponentNickname marked [${r + 1}, ${c + 1}] with X."
-                : "Partner $_opponentNickname cleared cell [${r + 1}, ${c + 1}].";
+            _latestActivityLog = val == 2
+                ? 'Partner $_opponentNickname placed a Queen at [${r + 1}, ${c + 1}]!'
+                : val == 1
+                    ? 'Partner $_opponentNickname marked [${r + 1}, ${c + 1}] with X.'
+                    : 'Partner $_opponentNickname cleared [${r + 1}, ${c + 1}].';
+            _opponentStatus = 'Active — last move at [${r + 1}, ${c + 1}] 🔗';
           });
+          // Check if the combined board is now solved
           _checkCoopWinCondition();
         }
         break;
 
+      // ── CO-OP ONLY: partner cleared the entire shared board ──
       case 'clear_board':
         if (!widget.isCompeteMode) {
           setState(() {
             _gameGrid.clear();
-            _latestActivityLog = "Partner $_opponentNickname cleared the board!";
+            _latestActivityLog = 'Partner $_opponentNickname cleared the board!';
+            _opponentStatus    = 'Board cleared by partner 🧹';
           });
         }
         break;
 
+      // ── COMPETE ONLY: opponent's queen-placement progress update ──
       case 'progress':
         if (widget.isCompeteMode) {
-          final int count = data['queensPlaced'];
+          final int count = data['queensPlaced'] as int;
           setState(() {
             _mockOpponentQueensPlaced = count;
-            if (count < _currentBoard.size) {
-              _opponentStatus = "Placing Queens... 👑 ($count/${_currentBoard.size})";
-              _latestActivityLog = "Opponent $_opponentNickname placed a Queen!";
-            } else {
-              _opponentStatus = "Solved! 🎉";
-              _latestActivityLog = "Opponent $_opponentNickname solved the board!";
-            }
+            _opponentStatus = count < _currentBoard.size
+                ? 'Placing Queens... 👑 ($count/${_currentBoard.size})'
+                : 'Solved! 🎉';
+            _latestActivityLog = count < _currentBoard.size
+                ? 'Rival $_opponentNickname placed a Queen! ($count/${_currentBoard.size})'
+                : 'Rival $_opponentNickname solved the board!';
           });
         }
         break;
 
+      // ── BOTH MODES: round finished ──
       case 'round_over':
+        if (_roundEndedForCurrentMatch) break; // guard: already handled locally
+
         if (widget.isCompeteMode) {
-          final String winner = data['winner'];
-          if (winner == 'me') {
+          // Opponent sent 'me' meaning they won — we lost this round
+          if (data['winner'] == 'me') {
+            _roundEndedForCurrentMatch = true;
             _gameTimer?.cancel();
             _handleRoundEnded(winner: 'opponent');
           }
+        } else {
+          // Co-op: partner's board also reached the solved state
+          // (can arrive slightly after our own local detection — guard handles it)
+          _roundEndedForCurrentMatch = true;
+          _gameTimer?.cancel();
+          _handleRoundEnded(winner: 'coop');
         }
         break;
     }
@@ -262,59 +319,49 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
   void _handleCellTap(int r, int c) {
     if (_isPaused || _isSeriesOver) return;
 
-    final String cellKey = "$r,$c";
+    final String cellKey    = '$r,$c';
     final String playerColor = widget.playerColor.toLowerCase();
 
-    setState(() {
-      final currentMap = _gameGrid[cellKey];
-      final currentValue = currentMap?['value'] ?? 0;
-      
-      int newValue = 0;
-      if (currentValue == 0) {
-        // Empty -> X
-        newValue = 1;
-      } else if (currentValue == 1) {
-        // X -> Queen
-        newValue = 2;
-      } else {
-        // Queen -> Empty
-        newValue = 0;
-      }
+    // Compute new value before setState so we can use it outside
+    final currentValue = _gameGrid[cellKey]?['value'] ?? 0;
+    final int newValue = currentValue == 0 ? 1 : currentValue == 1 ? 2 : 0;
 
+    setState(() {
       if (newValue == 0) {
         _gameGrid.remove(cellKey);
       } else {
-        _gameGrid[cellKey] = {
-          'value': newValue,
-          'player': playerColor, // player takes ownership of the cell move
-        };
+        _gameGrid[cellKey] = {'value': newValue, 'player': playerColor};
       }
 
-      _latestActivityLog = newValue == 2 
-        ? "You placed a Queen at [${r + 1}, ${c + 1}]!"
-        : newValue == 1 
-          ? "You marked cell [${r + 1}, ${c + 1}] with X."
-          : "You cleared cell [${r + 1}, ${c + 1}].";
-      
-      // Update real-time peer device over WebRTC
-      if (!widget.isCompeteMode) {
-        WebRTCSignalingManager.instance.sendMessage({
-          "type": "cell_tap",
-          "row": r,
-          "col": c,
-          "val": newValue,
-          "player": playerColor,
-        });
-      } else {
-        // In compete mode, broadcast progress update showing number of queens placed
-        int queensCount = _gameGrid.values.where((cell) => cell['value'] == 2 && cell['player'] == playerColor).length;
-        WebRTCSignalingManager.instance.sendMessage({
-          "type": "progress",
-          "queensPlaced": queensCount,
-        });
-      }
+      _latestActivityLog = newValue == 2
+          ? 'You placed a Queen at [${r + 1}, ${c + 1}]!'
+          : newValue == 1
+              ? 'You marked [${r + 1}, ${c + 1}] with X.'
+              : 'You cleared [${r + 1}, ${c + 1}].';
     });
 
+    // ── Sync to peer via Firebase RTDB ──────────────────────────────────
+    if (!widget.isCompeteMode) {
+      // Co-op: send the exact cell change so the partner's board mirrors it
+      FirebaseGameManager.instance.sendMessage({
+        'type':   'cell_tap',
+        'row':    r,
+        'col':    c,
+        'val':    newValue,
+        'player': playerColor,
+      });
+    } else {
+      // Compete: only broadcast how many queens this player has placed
+      final queensCount = _gameGrid.values
+          .where((cell) => cell['value'] == 2 && cell['player'] == playerColor)
+          .length;
+      FirebaseGameManager.instance.sendMessage({
+        'type':         'progress',
+        'queensPlaced': queensCount,
+      });
+    }
+
+    // ── Win detection ────────────────────────────────────────────────────
     if (widget.isCompeteMode) {
       _checkCompeteWinCondition();
     } else {
@@ -324,30 +371,28 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
 
   // Checks win condition for Independent Compete Mode
   void _checkCompeteWinCondition() {
+    if (_roundEndedForCurrentMatch) return;
     if (_hasSolvedBoardCorrectly()) {
+      _roundEndedForCurrentMatch = true;
       _gameTimer?.cancel();
-      
-      // Signal win to opponent
-      WebRTCSignalingManager.instance.sendMessage({
+      FirebaseGameManager.instance.sendMessage({
         "type": "round_over",
         "winner": "me",
       });
-
       _handleRoundEnded(winner: 'player');
     }
   }
 
   // Checks win condition for Collaborative Shared Co-op Mode
   void _checkCoopWinCondition() {
+    if (_roundEndedForCurrentMatch) return;
     if (_hasSolvedBoardCorrectly()) {
+      _roundEndedForCurrentMatch = true;
       _gameTimer?.cancel();
-      
-      // Signal Co-op win to sync both screens instantly
-      WebRTCSignalingManager.instance.sendMessage({
+      FirebaseGameManager.instance.sendMessage({
         "type": "round_over",
         "winner": "coop",
       });
-
       _handleRoundEnded(winner: 'coop');
     }
   }
@@ -608,22 +653,22 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
   // Resets the current board layout
   void _clearActiveBoard() {
     if (_isSeriesOver) return;
+
     setState(() {
       _gameGrid.clear();
-      _latestActivityLog = "Active board template cleared!";
-      
-      // Update peer device over WebRTC
-      if (!widget.isCompeteMode) {
-        WebRTCSignalingManager.instance.sendMessage({
-          "type": "clear_board",
-        });
-      } else {
-        WebRTCSignalingManager.instance.sendMessage({
-          "type": "progress",
-          "queensPlaced": 0,
-        });
-      }
+      _latestActivityLog = 'Board cleared!';
     });
+
+    if (!widget.isCompeteMode) {
+      // Co-op: tell partner to clear their copy of the shared board too
+      FirebaseGameManager.instance.sendMessage({'type': 'clear_board'});
+    } else {
+      // Compete: reset our queen count on the opponent's progress display
+      FirebaseGameManager.instance.sendMessage({
+        'type':         'progress',
+        'queensPlaced': 0,
+      });
+    }
   }
 
   // --- UI BUILDING BLOCKS ---
@@ -750,6 +795,16 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
   }
 
   Widget _buildCoopHeader() {
+    // Derive colours directly from what each player chose at setup.
+    // In co-op the two colours are always blue and green.
+    final myColor      = _colorFromPlayerString(widget.playerColor);
+    final myColorLight = _lightColorFromPlayerString(widget.playerColor);
+
+    // Partner's colour is whichever co-op colour the local player did NOT pick.
+    final partnerColorStr  = widget.playerColor.toLowerCase() == 'blue' ? 'green' : 'blue';
+    final partnerColor     = _colorFromPlayerString(partnerColorStr);
+    final partnerColorLight = _lightColorFromPlayerString(partnerColorStr);
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(15),
@@ -757,84 +812,92 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: AppColors.navyBlue, width: 2.5),
-        boxShadow: const [
-          BoxShadow(color: AppColors.navyBlue, offset: Offset(5, 5)),
-        ],
+        boxShadow: const [BoxShadow(color: AppColors.navyBlue, offset: Offset(5, 5))],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          // Player
+          // ── Local player ──────────────────────────────────────────────
           Column(
             children: [
               Image.asset(
                 _playerIconPath,
-                width: 32,
-                height: 32,
+                width: 32, height: 32,
                 fit: BoxFit.contain,
                 filterQuality: FilterQuality.high,
-                errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, size: 32, color: AppColors.navyBlue),
+                errorBuilder: (_, __, ___) =>
+                    Icon(Icons.person_rounded, size: 32, color: myColor),
               ),
               const SizedBox(height: 4),
               Text(
                 _playerNickname.toUpperCase(),
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'DynaPuff',
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF0D47A1), // Darker elegant blue text
+                  color: myColor,
                 ),
               ),
               const SizedBox(height: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE3F2FD), // Darker elegant blue container background
+                  color: myColorLight,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.navyBlue, width: 1.5),
+                  border: Border.all(color: myColor, width: 1.5),
                 ),
-                child: const Text(
-                  "Player",
-                  style: TextStyle(fontFamily: 'Comfortaa', fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+                child: Text(
+                  widget.playerColor.toUpperCase(),
+                  style: TextStyle(
+                    fontFamily: 'Comfortaa',
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: myColor,
+                  ),
                 ),
               ),
             ],
           ),
 
-          const Icon(Icons.link_rounded, color: AppColors.navyBlue, size: 24),
+          Icon(Icons.link_rounded, color: AppColors.navyBlue, size: 24),
 
-          // Partner
+          // ── Partner ───────────────────────────────────────────────────
           Column(
             children: [
               Image.asset(
                 _opponentIconPath,
-                width: 32,
-                height: 32,
+                width: 32, height: 32,
                 fit: BoxFit.contain,
                 filterQuality: FilterQuality.high,
-                errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, size: 32, color: AppColors.navyBlue),
+                errorBuilder: (_, __, ___) =>
+                    Icon(Icons.person_rounded, size: 32, color: partnerColor),
               ),
               const SizedBox(height: 4),
               Text(
                 _opponentNickname.toUpperCase(),
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'DynaPuff',
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
-                  color: Colors.green,
+                  color: partnerColor,
                 ),
               ),
               const SizedBox(height: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.green.shade50,
+                  color: partnerColorLight,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.navyBlue, width: 1.5),
+                  border: Border.all(color: partnerColor, width: 1.5),
                 ),
-                child: const Text(
-                  "Partner",
-                  style: TextStyle(fontFamily: 'Comfortaa', fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+                child: Text(
+                  partnerColorStr.toUpperCase(),
+                  style: TextStyle(
+                    fontFamily: 'Comfortaa',
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: partnerColor,
+                  ),
                 ),
               ),
             ],
@@ -845,7 +908,15 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
   }
 
   Widget _buildScoreboardHeader() {
-    final playerIsBlue = widget.playerColor.toLowerCase() == 'blue';
+    // Derive colours from what each player chose — no hardcoded blue/red.
+    // In compete mode the two colours are always blue and red.
+    final myColor       = _colorFromPlayerString(widget.playerColor);
+    final myColorLight  = _lightColorFromPlayerString(widget.playerColor);
+
+    // Opponent's colour is whichever compete colour the local player did NOT pick.
+    final opponentColorStr  = widget.playerColor.toLowerCase() == 'blue' ? 'red' : 'blue';
+    final opponentColor     = _colorFromPlayerString(opponentColorStr);
+    final opponentColorLight = _lightColorFromPlayerString(opponentColorStr);
 
     return Container(
       width: double.infinity,
@@ -854,23 +925,21 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: AppColors.navyBlue, width: 2.5),
-        boxShadow: const [
-          BoxShadow(color: AppColors.navyBlue, offset: Offset(5, 5)),
-        ],
+        boxShadow: const [BoxShadow(color: AppColors.navyBlue, offset: Offset(5, 5))],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          // Player info
+          // ── Local player ──────────────────────────────────────────────
           Column(
             children: [
               Image.asset(
                 _playerIconPath,
-                width: 32,
-                height: 32,
+                width: 32, height: 32,
                 fit: BoxFit.contain,
                 filterQuality: FilterQuality.high,
-                errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, size: 32),
+                errorBuilder: (_, __, ___) =>
+                    Icon(Icons.person_rounded, size: 32, color: myColor),
               ),
               const SizedBox(height: 4),
               Text(
@@ -879,28 +948,32 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
                   fontFamily: 'DynaPuff',
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
-                  color: playerIsBlue ? const Color(0xFF0D47A1) : Colors.red,
+                  color: myColor,
                 ),
               ),
               const SizedBox(height: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                 decoration: BoxDecoration(
-                  color: playerIsBlue ? Colors.blue.shade100 : Colors.red.shade100,
+                  color: myColorLight,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.navyBlue, width: 1.5),
+                  border: Border.all(color: myColor, width: 1.5),
                 ),
                 child: Text(
-                  "👑 $_playerScore",
-                  style: const TextStyle(fontFamily: 'DynaPuff', fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+                  '👑 $_playerScore',
+                  style: const TextStyle(
+                    fontFamily: 'DynaPuff',
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.navyBlue,
+                  ),
                 ),
               ),
             ],
           ),
 
-          // Separator Sticker
           const Text(
-            "VS",
+            'VS',
             style: TextStyle(
               fontFamily: 'DynaPuff',
               fontSize: 16,
@@ -909,16 +982,16 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
             ),
           ),
 
-          // Opponent info
+          // ── Opponent ──────────────────────────────────────────────────
           Column(
             children: [
               Image.asset(
                 _opponentIconPath,
-                width: 32,
-                height: 32,
+                width: 32, height: 32,
                 fit: BoxFit.contain,
                 filterQuality: FilterQuality.high,
-                errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, size: 32),
+                errorBuilder: (_, __, ___) =>
+                    Icon(Icons.person_rounded, size: 32, color: opponentColor),
               ),
               const SizedBox(height: 4),
               Text(
@@ -927,20 +1000,25 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
                   fontFamily: 'DynaPuff',
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
-                  color: playerIsBlue ? Colors.red : const Color(0xFF0D47A1),
+                  color: opponentColor,
                 ),
               ),
               const SizedBox(height: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                 decoration: BoxDecoration(
-                  color: playerIsBlue ? Colors.red.shade100 : Colors.blue.shade100,
+                  color: opponentColorLight,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.navyBlue, width: 1.5),
+                  border: Border.all(color: opponentColor, width: 1.5),
                 ),
                 child: Text(
-                  "👑 $_opponentScore",
-                  style: const TextStyle(fontFamily: 'DynaPuff', fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.navyBlue),
+                  '👑 $_opponentScore',
+                  style: const TextStyle(
+                    fontFamily: 'DynaPuff',
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.navyBlue,
+                  ),
                 ),
               ),
             ],
@@ -948,6 +1026,39 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
         ],
       ),
     );
+  }
+
+  /// Maps the stored player-colour string to an actual [Color].
+  /// These are the exact colours players chose at match setup:
+  ///   'blue'  → deep blue  (host default in co-op / compete)
+  ///   'green' → green      (guest default in co-op)
+  ///   'red'   → red        (guest default in compete)
+  /// Any unknown string falls back to grey so nothing is invisible.
+  Color _colorFromPlayerString(String playerStr) {
+    switch (playerStr.toLowerCase()) {
+      case 'blue':
+        return const Color(0xFF1565C0);   // deep blue
+      case 'green':
+        return const Color(0xFF2E7D32);   // deep green
+      case 'red':
+        return Colors.redAccent;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  /// Light pastel background tint that pairs with [_colorFromPlayerString].
+  Color _lightColorFromPlayerString(String playerStr) {
+    switch (playerStr.toLowerCase()) {
+      case 'blue':
+        return const Color(0xFFE3F2FD);   // light blue
+      case 'green':
+        return const Color(0xFFE8F5E9);   // light green
+      case 'red':
+        return const Color(0xFFFFEBEE);   // light red
+      default:
+        return const Color(0xFFF5F5F5);
+    }
   }
 
   Widget _buildMultiplayerBoardGrid(double boardScale) {
@@ -1003,18 +1114,13 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
                 bool isQueenConflict = queenConflicts.contains(cellKey);
                 bool isNeighborhoodConflict = neighborhoodConflicts.contains(cellKey);
 
-                // Check cell ownership colors (Opponent is Pink/Green depending on mode)
-                final isPlayerCell = cellOwner == widget.playerColor.toLowerCase();
-
+                // Resolve the display colour for this cell from the stored
+                // owner string ('blue', 'green', 'red').
+                // In co-op both players chose their colour at setup, so we
+                // honour exactly what is stored — no mode-based overrides.
                 Color ownerColor = Colors.transparent;
                 if (cellVal > 0) {
-                  if (isPlayerCell) {
-                    ownerColor = widget.playerColor.toLowerCase() == 'blue' 
-                        ? (widget.isCompeteMode ? Colors.cyan : const Color(0xFF1565C0)) // Darker elegant blue overlay in Combine Solving Mode!
-                        : Colors.redAccent;
-                  } else {
-                    ownerColor = widget.isCompeteMode ? Colors.pink : Colors.green; // Pink for Duel, Green for Co-op
-                  }
+                  ownerColor = _colorFromPlayerString(cellOwner);
                 }
 
                 return GestureDetector(
@@ -1134,24 +1240,25 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
             children: [
               Icon(Icons.wifi_tethering_rounded, color: rivalColor, size: 18),
               const SizedBox(width: 8),
-              Text(
-                widget.isCompeteMode 
-                    ? "RIVAL $_opponentNickname LIVE STATE".toUpperCase() 
-                    : "PARTNER $_opponentNickname LIVE STATE".toUpperCase(),
-                style: const TextStyle(
-                  fontFamily: 'DynaPuff',
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.secondaryText,
+              Expanded(
+                child: Text(
+                  widget.isCompeteMode
+                      ? 'RIVAL ${_opponentNickname.toUpperCase()} LIVE STATE'
+                      : 'PARTNER ${_opponentNickname.toUpperCase()} LIVE STATE',
+                  style: const TextStyle(
+                    fontFamily: 'DynaPuff',
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.secondaryText,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
-            widget.isCompeteMode 
-              ? "Status: $_opponentStatus"
-              : "Status: Linked & Solving shared deck collaboratively! 🔗",
+            'Status: $_opponentStatus',
             style: const TextStyle(
               fontFamily: 'Comfortaa',
               fontSize: 12,
@@ -1297,11 +1404,22 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
 
   // --- SERIES ENDED / RESULTS SCREEN ---
   Widget _buildSeriesOverView() {
-    final playerWon = _playerScore > _opponentScore;
-    final winnerTitle = playerWon ? "CHAMPION OF MARGINS!" : "DEFEATED IN DUEL!";
-    final winnerSubtitle = playerWon 
-        ? "You outperformed $_opponentNickname in the series race!" 
-        : "$_opponentNickname claimed the trophy! Rematch to secure revenge.";
+    // Co-op: both players always "win" together — celebrate the team
+    // Compete: whoever has more points wins
+    final bool isCoopMode = !widget.isCompeteMode;
+    final bool playerWon  = _playerScore > _opponentScore;
+
+    final String winnerTitle = isCoopMode
+        ? (_playerScore == widget.matchCount
+            ? 'PERFECT CO-OP! 🎉'
+            : 'SERIES COMPLETE! 🔗')
+        : (playerWon ? 'CHAMPION OF MARGINS! 👑' : 'DEFEATED IN DUEL! 😢');
+
+    final String winnerSubtitle = isCoopMode
+        ? 'You and $_opponentNickname solved $_playerScore of ${widget.matchCount} boards together!'
+        : (playerWon
+            ? 'You outperformed $_opponentNickname in the series race!'
+            : '$_opponentNickname claimed the trophy! Rematch to secure revenge.');
 
     return Center(
       child: SingleChildScrollView(
@@ -1328,9 +1446,15 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
                     Transform.scale(
                       scale: 1.1,
                       child: Icon(
-                        playerWon ? Icons.emoji_events_rounded : Icons.sentiment_very_dissatisfied_rounded,
+                        isCoopMode
+                            ? Icons.group_work_rounded
+                            : (playerWon
+                                ? Icons.emoji_events_rounded
+                                : Icons.sentiment_very_dissatisfied_rounded),
                         size: 80,
-                        color: playerWon ? AppColors.gold : Colors.redAccent,
+                        color: isCoopMode
+                            ? Colors.green
+                            : (playerWon ? AppColors.gold : Colors.redAccent),
                       ),
                     ),
                     const SizedBox(height: 20),

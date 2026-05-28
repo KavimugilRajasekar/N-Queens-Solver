@@ -7,7 +7,7 @@ import 'dart:io';
 import 'match_setup_screen.dart';
 import '../widgets/success_dialog.dart';
 import '../widgets/error_dialog.dart';
-import '../utils/webrtc_signaling_manager.dart';
+import '../utils/firebase_game_manager.dart';
 
 class CompeteModeScreen extends StatefulWidget {
   const CompeteModeScreen({super.key});
@@ -91,7 +91,7 @@ class _CompeteModeScreenState extends State<CompeteModeScreen> {
       if (mounted) setState(() => _playerId = finalId);
 
       // Auto-register immediately upon first-time generation so peer matches work on first launch!
-      await WebRTCSignalingManager.instance.registerPlayerProfile();
+      await FirebaseGameManager.instance.registerPlayerProfile();
     } catch (e) {
       // Final fallback to ensure the app never hangs
       final fallbackHash = (DateTime.now().millisecondsSinceEpoch % 900000) + 100000;
@@ -101,7 +101,7 @@ class _CompeteModeScreenState extends State<CompeteModeScreen> {
       await prefs.setString('player_unique_id_v2', finalId);
       if (mounted) setState(() => _playerId = finalId);
       
-      await WebRTCSignalingManager.instance.registerPlayerProfile();
+      await FirebaseGameManager.instance.registerPlayerProfile();
     }
   }
 
@@ -357,7 +357,7 @@ class _CompeteModeScreenState extends State<CompeteModeScreen> {
     await prefs.setString('player_icon', _selectedIcon);
 
     // Register online via Vercel
-    final success = await WebRTCSignalingManager.instance.registerPlayerProfile();
+    final success = await FirebaseGameManager.instance.registerPlayerProfile();
 
     setState(() => _isSaving = false);
 

@@ -10,7 +10,7 @@ import 'package:lottie/lottie.dart';
 import '../utils/board_processor.dart';
 import '../utils/shortcut_manager.dart';
 import 'compete_mode_screen.dart';
-import '../utils/webrtc_signaling_manager.dart';
+import '../utils/firebase_game_manager.dart';
 import 'peers_play_screen.dart';
 
 class LandingPage extends StatefulWidget {
@@ -35,11 +35,11 @@ class _LandingPageState extends State<LandingPage> {
     });
     
     // Register invite listener
-    WebRTCSignalingManager.instance.incomingInviteNotifier.addListener(_handleIncomingInviteListener);
+    FirebaseGameManager.instance.incomingInviteNotifier.addListener(_handleIncomingInviteListener);
     
     // Process any pending invite loaded during startup/boot phase immediately
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (WebRTCSignalingManager.instance.incomingInviteNotifier.value != null) {
+      if (FirebaseGameManager.instance.incomingInviteNotifier.value != null) {
         _handleIncomingInviteListener();
       }
     });
@@ -47,16 +47,16 @@ class _LandingPageState extends State<LandingPage> {
 
   @override
   void dispose() {
-    WebRTCSignalingManager.instance.incomingInviteNotifier.removeListener(_handleIncomingInviteListener);
+    FirebaseGameManager.instance.incomingInviteNotifier.removeListener(_handleIncomingInviteListener);
     super.dispose();
   }
 
   void _handleIncomingInviteListener() {
-    final invite = WebRTCSignalingManager.instance.incomingInviteNotifier.value;
+    final invite = FirebaseGameManager.instance.incomingInviteNotifier.value;
     if (invite == null) return;
     
     // Reset the value so we don't trigger multiple popups
-    WebRTCSignalingManager.instance.incomingInviteNotifier.value = null;
+    FirebaseGameManager.instance.incomingInviteNotifier.value = null;
 
     if (!mounted) return;
 
@@ -128,7 +128,7 @@ class _LandingPageState extends State<LandingPage> {
               Navigator.pop(dialogCtx);
 
               // Reconstruct boards
-              final boards = WebRTCSignalingManager.deserializeBoards(invite['matchBoards']);
+              final boards = FirebaseGameManager.deserializeBoards(invite['matchBoards']);
 
               // Show loading dialog
               showDialog(
@@ -144,7 +144,7 @@ class _LandingPageState extends State<LandingPage> {
                         children: [
                           CircularProgressIndicator(color: AppColors.navyBlue),
                           SizedBox(height: 15),
-                          Text("Connecting WebRTC...", style: TextStyle(fontFamily: 'DynaPuff', color: AppColors.navyBlue)),
+                          Text("Connecting to Game Room...", style: TextStyle(fontFamily: 'DynaPuff', color: AppColors.navyBlue)),
                         ],
                       ),
                     ),
@@ -154,7 +154,7 @@ class _LandingPageState extends State<LandingPage> {
 
               try {
                 // Initialize Joiner Connection
-                await WebRTCSignalingManager.instance.joinConnection(invite);
+                await FirebaseGameManager.instance.joinConnection(invite);
                 
                 if (mounted) {
                   Navigator.pop(context); // Dismiss loading dialog
@@ -179,7 +179,7 @@ class _LandingPageState extends State<LandingPage> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       backgroundColor: Colors.redAccent,
-                      content: Text("Failed to connect via WebRTC: $e"),
+                      content: Text("Failed to connect to game room: $e"),
                     ),
                   );
                 }

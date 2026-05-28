@@ -10,7 +10,7 @@ import '../utils/board_generator.dart';
 import '../widgets/funky_loader_dialog.dart';
 import '../widgets/funky_lobby_details_dialog.dart';
 import 'peers_play_screen.dart';
-import '../utils/webrtc_signaling_manager.dart';
+import '../utils/firebase_game_manager.dart';
 
 class MatchSetupScreen extends StatefulWidget {
   final bool isCompeteMode;
@@ -51,14 +51,14 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
       }
     }
     // Start mailbox polling dynamically when entering match setup screen
-    WebRTCSignalingManager.instance.startMailboxPolling();
+    FirebaseGameManager.instance.startMailboxPolling();
   }
 
   @override
   void dispose() {
     _opponentIdController.dispose();
     // Stop mailbox polling when user leaves match setup screen
-    WebRTCSignalingManager.instance.stopMailboxPolling();
+    FirebaseGameManager.instance.stopMailboxPolling();
     super.dispose();
   }
 
@@ -138,7 +138,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
       ),
     );
 
-    final peerProfile = await WebRTCSignalingManager.instance.checkPeerValid(opponentId);
+    final peerProfile = await FirebaseGameManager.instance.checkPeerValid(opponentId);
     
     if (mounted) {
       Navigator.pop(context); // Close search dialog
@@ -218,7 +218,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
             return;
           }
 
-          // --- STEP 3: ESTABLISH WebRTC CONNECTION ---
+          // --- STEP 3: ESTABLISH FIREBASE CONNECTION ---
           bool connectionEstablished = false;
           void Function()? connListener;
           
@@ -227,10 +227,10 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
             barrierDismissible: false,
             builder: (loaderCtx) {
               connListener = () {
-                final state = WebRTCSignalingManager.instance.connectionState.value;
+                final state = FirebaseGameManager.instance.connectionState.value;
                 if (state == 'connected' && !connectionEstablished) {
                   connectionEstablished = true;
-                  WebRTCSignalingManager.instance.connectionState.removeListener(connListener!);
+                  FirebaseGameManager.instance.connectionState.removeListener(connListener!);
                   
                   Navigator.pop(loaderCtx); // pop loader dialog
 
@@ -238,7 +238,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                     SnackBar(
                       backgroundColor: Colors.green,
                       content: Text(
-                        widget.isCompeteMode ? "DUEL ACTIVE! WebRTC established." : "LOBBY CONNECTED! Co-op synchronized.",
+                        widget.isCompeteMode ? "DUEL ACTIVE! Firebase connected." : "LOBBY CONNECTED! Co-op synchronized.",
                         style: const TextStyle(fontFamily: 'Comfortaa', fontWeight: FontWeight.bold, color: Colors.white),
                       ),
                     ),
@@ -259,14 +259,14 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                   );
                 } else if (state == 'failed') {
                   _isConnecting = false;
-                  WebRTCSignalingManager.instance.connectionState.removeListener(connListener!);
+                  FirebaseGameManager.instance.connectionState.removeListener(connListener!);
                   Navigator.pop(loaderCtx);
-                  WebRTCSignalingManager.instance.disconnect();
+                  FirebaseGameManager.instance.disconnect();
                   _showWarningDialog("Connection Failed", "Failed to establish connection with opponent. They might have declined or timed out.");
                 }
               };
               
-              WebRTCSignalingManager.instance.connectionState.addListener(connListener!);
+              FirebaseGameManager.instance.connectionState.addListener(connListener!);
 
               return FunkyLoaderDialog(
                 title: widget.isCompeteMode ? "TRANSMITTING COMPETE..." : "TRANSMITTING CO-OP...",
@@ -275,13 +275,13 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                       "Locking board templates... ",
                       "Transmitting Duel Invite... ",
                       "Waiting for opponent to accept... ",
-                      "Connecting peer-to-peer WebRTC... ",
+                      "Connecting via Firebase... ",
                     ]
                   : const [
                       "Syncing puzzle blueprints... ",
                       "Transmitting Lobby Invite... ",
                       "Waiting for partner to accept... ",
-                      "Connecting peer-to-peer WebRTC... ",
+                      "Connecting via Firebase... ",
                     ],
                 cancelLabel: "CANCEL INVITE",
                 totalDuration: const Duration(minutes: 5), // Wait until connection or cancel
@@ -290,9 +290,9 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                 onCancel: () {
                   _isConnecting = false;
                   if (connListener != null) {
-                    WebRTCSignalingManager.instance.connectionState.removeListener(connListener!);
+                    FirebaseGameManager.instance.connectionState.removeListener(connListener!);
                   }
-                  WebRTCSignalingManager.instance.disconnect();
+                  FirebaseGameManager.instance.disconnect();
                   Navigator.pop(loaderCtx); // close loader
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -308,9 +308,9 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
             },
           );
 
-          // Launch host WebRTC session
+          // Launch host Firebase session
           try {
-            await WebRTCSignalingManager.instance.hostConnection(
+            await FirebaseGameManager.instance.hostConnection(
               opponentId,
               widget.isCompeteMode,
               _matchCount,
@@ -320,11 +320,11 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
             _isConnecting = false;
             if (connListener != null) {
               try {
-                WebRTCSignalingManager.instance.connectionState.removeListener(connListener!);
+                FirebaseGameManager.instance.connectionState.removeListener(connListener!);
               } catch (_) {}
             }
             Navigator.pop(context); // Dismiss loading if open
-            WebRTCSignalingManager.instance.disconnect();
+            FirebaseGameManager.instance.disconnect();
             _showWarningDialog("Invite Failed", e.toString());
           }
         },
