@@ -97,15 +97,17 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
     // Show a one-time snackbar then pop back to the lobby
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        backgroundColor: Colors.redAccent,
-        duration: const Duration(seconds: 3),
         content: Text(
           '$_opponentNickname left the game. Returning to lobby...',
-          style: const TextStyle(
-            fontFamily: 'Comfortaa',
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
+          style: const TextStyle(fontFamily: 'DynaPuff', color: Colors.white, fontSize: 16),
+        ),
+        duration: const Duration(seconds: 1),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.navyBlue,
+        margin: const EdgeInsets.only(bottom: 105, left: 40, right: 40),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(15),
+          side: const BorderSide(color: Colors.white24, width: 1),
         ),
       ),
     );

@@ -114,11 +114,18 @@ class _LandingPageState extends State<LandingPage> {
             onPressed: () {
               Navigator.pop(dialogCtx);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  backgroundColor: Colors.redAccent,
-                  content: Text(
+                SnackBar(
+                  content: const Text(
                     "Challenge declined!",
-                    style: TextStyle(fontFamily: 'Comfortaa', fontWeight: FontWeight.bold, color: Colors.white),
+                    style: TextStyle(fontFamily: 'DynaPuff', color: Colors.white, fontSize: 16),
+                  ),
+                  duration: const Duration(seconds: 1),
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: AppColors.navyBlue,
+                  margin: const EdgeInsets.only(bottom: 105, left: 40, right: 40),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                    side: const BorderSide(color: Colors.white24, width: 1),
                   ),
                 ),
               );
@@ -191,8 +198,18 @@ class _LandingPageState extends State<LandingPage> {
                   Navigator.pop(context); // Dismiss loading dialog
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      backgroundColor: Colors.redAccent,
-                      content: Text("Failed to connect to game room: $e"),
+                      content: Text(
+                        "Failed to connect to game room: $e",
+                        style: const TextStyle(fontFamily: 'DynaPuff', color: Colors.white, fontSize: 16),
+                      ),
+                      duration: const Duration(seconds: 1),
+                      behavior: SnackBarBehavior.floating,
+                      backgroundColor: AppColors.navyBlue,
+                      margin: const EdgeInsets.only(bottom: 105, left: 40, right: 40),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                        side: const BorderSide(color: Colors.white24, width: 1),
+                      ),
                     ),
                   );
                 }

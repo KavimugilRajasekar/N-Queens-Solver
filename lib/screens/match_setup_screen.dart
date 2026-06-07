@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/colors.dart';
 import '../widgets/notebook_painter.dart';
 import '../utils/storage_manager.dart';
@@ -38,10 +40,13 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
   int _matchCount = 3; // Default best of 3
   bool _isConnecting = false;
 
+  List<Map<String, String>> _recentOpponents = [];
+
   @override
   void initState() {
     super.initState();
     _loadMasteredBoards();
+    _loadRecentOpponents();
     // In Compete Mode, Library is forbidden, so force auto-generate configuration
     if (widget.isCompeteMode) {
       for (int i = 0; i < 5; i++) {
@@ -58,6 +63,26 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
     // Stop mailbox polling when user leaves match setup screen
     FirebaseGameManager.instance.stopMailboxPolling();
     super.dispose();
+  }
+
+  Future<void> _loadRecentOpponents() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = prefs.getString('recent_opponents');
+    if (jsonStr != null) {
+      final List<dynamic> decoded = jsonDecode(jsonStr);
+      setState(() {
+        _recentOpponents = decoded.map((e) => Map<String, String>.from(e)).toList();
+      });
+    }
+  }
+
+  Future<void> _saveRecentOpponent(String id, String nickname) async {
+    final prefs = await SharedPreferences.getInstance();
+    _recentOpponents.removeWhere((o) => o['id'] == id);
+    _recentOpponents.insert(0, {'id': id, 'nickname': nickname});
+    if (_recentOpponents.length > 10) _recentOpponents = _recentOpponents.sublist(0, 10);
+    await prefs.setString('recent_opponents', jsonEncode(_recentOpponents));
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadMasteredBoards() async {
@@ -150,6 +175,8 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
       return;
     }
 
+    await _saveRecentOpponent(opponentId, peerProfile['nickname'] ?? 'Player');
+
     // --- STEP 2: SHOW LOBBY CONFIRMATION ---
     showDialog(
       context: context,
@@ -234,10 +261,17 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
 
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      backgroundColor: Colors.green,
                       content: Text(
                         widget.isCompeteMode ? "DUEL ACTIVE! Firebase connected." : "LOBBY CONNECTED! Co-op synchronized.",
-                        style: const TextStyle(fontFamily: 'Comfortaa', fontWeight: FontWeight.bold, color: Colors.white),
+                        style: const TextStyle(fontFamily: 'DynaPuff', color: Colors.white, fontSize: 16),
+                      ),
+                      duration: const Duration(seconds: 1),
+                      behavior: SnackBarBehavior.floating,
+                      backgroundColor: AppColors.navyBlue,
+                      margin: const EdgeInsets.only(bottom: 105, left: 40, right: 40),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                        side: const BorderSide(color: Colors.white24, width: 1),
                       ),
                     ),
                   );
@@ -293,11 +327,18 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                   FirebaseGameManager.instance.disconnect();
                   Navigator.pop(loaderCtx); // close loader
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      backgroundColor: Colors.redAccent,
-                      content: Text(
+                    SnackBar(
+                      content: const Text(
                         "Multiplayer invite cancelled!",
-                        style: TextStyle(fontFamily: 'Comfortaa', fontWeight: FontWeight.bold, color: Colors.white),
+                        style: TextStyle(fontFamily: 'DynaPuff', color: Colors.white, fontSize: 16),
+                      ),
+                      duration: const Duration(seconds: 1),
+                      behavior: SnackBarBehavior.floating,
+                      backgroundColor: AppColors.navyBlue,
+                      margin: const EdgeInsets.only(bottom: 105, left: 40, right: 40),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                        side: const BorderSide(color: Colors.white24, width: 1),
                       ),
                     ),
                   );
@@ -497,12 +538,29 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
               keyboardType: TextInputType.number,
               maxLength: 6,
               style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 2),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'Enter 6-digit ID...',
                 counterText: "",
                 border: InputBorder.none,
-                hintStyle: TextStyle(color: Colors.grey, fontWeight: FontWeight.normal, letterSpacing: 1),
+                hintStyle: const TextStyle(color: Colors.grey, fontWeight: FontWeight.normal, letterSpacing: 1),
                 isDense: true,
+                suffixIcon: _recentOpponents.isEmpty ? null : PopupMenuButton<String>(
+                  icon: const Icon(Icons.history_rounded, color: AppColors.navyBlue),
+                  tooltip: 'Recent Opponents',
+                  onSelected: (String id) {
+                    setState(() {
+                      _opponentIdController.text = id;
+                    });
+                  },
+                  itemBuilder: (BuildContext context) {
+                    return _recentOpponents.map((opponent) {
+                      return PopupMenuItem<String>(
+                        value: opponent['id']!.replaceAll('NQ-', ''), // just digits
+                        child: Text('${opponent['nickname']} (${opponent['id']})', style: const TextStyle(fontFamily: 'Comfortaa')),
+                      );
+                    }).toList();
+                  },
+                ),
               ),
             ),
             const Divider(color: AppColors.paperLine, thickness: 2),
