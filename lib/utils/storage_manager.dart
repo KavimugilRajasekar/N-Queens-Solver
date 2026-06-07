@@ -32,7 +32,7 @@ class StorageManager {
         id.toString(),
         {
           'id': region.id,
-          'color': region.color.value,
+          'color': region.color.toARGB32(),
           'coords': region.coordinates.map((p) => {'x': p.x, 'y': p.y}).toList(),
         }
       )),
@@ -125,7 +125,7 @@ class StorageManager {
         id.toString(),
         {
           'id': region.id,
-          'color': region.color.value,
+          'color': region.color.toARGB32(),
           'coords': region.coordinates.map((p) => {'x': p.x, 'y': p.y}).toList(),
         }
       ));

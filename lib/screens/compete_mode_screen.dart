@@ -143,7 +143,7 @@ class _CompeteModeScreenState extends State<CompeteModeScreen> {
                           border: Border.all(color: AppColors.navyBlue, width: 2.5),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.navyBlue.withOpacity(0.3),
+                              color: AppColors.navyBlue.withValues(alpha: 0.3),
                               offset: const Offset(4, 4),
                             )
                           ],
@@ -202,7 +202,7 @@ class _CompeteModeScreenState extends State<CompeteModeScreen> {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: AppColors.navyBlue, width: 2),
           boxShadow: [
-            BoxShadow(color: AppColors.navyBlue.withOpacity(0.15), offset: const Offset(6, 6)),
+            BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.15), offset: const Offset(6, 6)),
           ],
         ),
         child: Column(
@@ -277,7 +277,7 @@ class _CompeteModeScreenState extends State<CompeteModeScreen> {
                     color: isSelected ? AppColors.gold : Colors.white,
                     shape: BoxShape.circle,
                     border: Border.all(color: AppColors.navyBlue, width: isSelected ? 3 : 1.5),
-                    boxShadow: isSelected ? [BoxShadow(color: AppColors.navyBlue.withOpacity(0.3), offset: const Offset(4, 4))] : null,
+                    boxShadow: isSelected ? [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.3), offset: const Offset(4, 4))] : null,
                   ),
                   alignment: Alignment.center,
                   child: Padding(
@@ -307,7 +307,7 @@ class _CompeteModeScreenState extends State<CompeteModeScreen> {
                   border: Border.all(color: AppColors.navyBlue, width: 2),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.navyBlue.withOpacity(0.2),
+                      color: AppColors.navyBlue.withValues(alpha: 0.2),
                       offset: const Offset(4, 4),
                     )
                   ],
@@ -503,7 +503,7 @@ class _CompeteModeScreenState extends State<CompeteModeScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.white.withOpacity(0.3) : AppColors.navyBlue.withOpacity(0.1),
+                    color: isDark ? Colors.white.withValues(alpha: 0.3) : AppColors.navyBlue.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(icon, color: isDark ? Colors.white : AppColors.navyBlue, size: 30),
@@ -527,7 +527,7 @@ class _CompeteModeScreenState extends State<CompeteModeScreen> {
                         style: TextStyle(
                           fontFamily: 'Comfortaa',
                           fontSize: 14,
-                          color: (isDark ? Colors.white : AppColors.navyBlue).withOpacity(0.8),
+                          color: (isDark ? Colors.white : AppColors.navyBlue).withValues(alpha: 0.8),
                         ),
                       ),
                     ],

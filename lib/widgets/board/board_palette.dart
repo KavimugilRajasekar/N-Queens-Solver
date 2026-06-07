@@ -24,7 +24,7 @@ class BoardPalette extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: AppColors.navyBlue, width: 2),
-          boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.1), offset: const Offset(4, 4))],
+          boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.1), offset: const Offset(4, 4))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -49,7 +49,7 @@ class BoardPalette extends StatelessWidget {
                           color: RegionColors.getRegionColor(id, boardSize),
                           shape: BoxShape.circle,
                           border: Border.all(color: isSelected ? AppColors.navyBlue : Colors.transparent, width: 3),
-                          boxShadow: isSelected ? [BoxShadow(color: AppColors.navyBlue.withOpacity(0.3), blurRadius: 8)] : [],
+                          boxShadow: isSelected ? [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.3), blurRadius: 8)] : [],
                         ),
                         child: Center(
                           child: Text(

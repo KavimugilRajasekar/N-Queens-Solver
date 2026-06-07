@@ -1,5 +1,3 @@
-import 'dart:ui';
-import 'package:flutter/material.dart';
 import 'board_processor.dart';
 
 class SolverStep {
@@ -188,7 +186,9 @@ class NQueensSolver {
     final restOfCurrent = currentRegionPoints.where((p) => p.x - 1 != r || p.y - 1 != c).toList();
     if (restOfCurrent.isNotEmpty) {
       removedFromRegions[regionId] = restOfCurrent;
-      for (var p in restOfCurrent) currentRegionPoints.remove(p);
+      for (var p in restOfCurrent) {
+        currentRegionPoints.remove(p);
+      }
     }
 
     // 2. Remove invalid cells from OTHER regions
@@ -207,7 +207,9 @@ class NQueensSolver {
         } else {
           removedFromRegions[id] = toRemove;
         }
-        for (var p in toRemove) cells.remove(p);
+        for (var p in toRemove) {
+          cells.remove(p);
+        }
       }
     });
     return _SavedMoveState(newBlocks, removedFromRegions, removedCount);
@@ -216,7 +218,9 @@ class NQueensSolver {
   void _undoMove(int regionId, int r, int c, _SavedMoveState state) {
     _rowMask &= ~(1 << r);
     _colMask &= ~(1 << c);
-    for (var key in state.newBlocks) _blocked.remove(key);
+    for (var key in state.newBlocks) {
+      _blocked.remove(key);
+    }
     state.removedFromRegions.forEach((id, cells) {
       _regionCells[id]!.addAll(cells);
     });

@@ -4,13 +4,13 @@ import '../constants/colors.dart';
 import '../widgets/notebook_painter.dart';
 import '../utils/storage_manager.dart';
 import 'saved_boards_screen.dart';
-import 'camera_screen.dart';
 
 import 'package:lottie/lottie.dart';
 import '../utils/board_processor.dart';
 import '../utils/shortcut_manager.dart';
 import 'compete_mode_screen.dart';
 import '../utils/firebase_game_manager.dart';
+import '../utils/update_service.dart';
 import 'peers_play_screen.dart';
 
 class LandingPage extends StatefulWidget {
@@ -42,6 +42,8 @@ class _LandingPageState extends State<LandingPage> {
       if (FirebaseGameManager.instance.incomingInviteNotifier.value != null) {
         _handleIncomingInviteListener();
       }
+      // Check GitHub for a newer release and notify the user if one exists
+      UpdateService.checkAndNotify(context);
     });
   }
 
@@ -159,6 +161,17 @@ class _LandingPageState extends State<LandingPage> {
                 if (mounted) {
                   Navigator.pop(context); // Dismiss loading dialog
 
+                  // Derive joiner colour as the complement of what the host chose.
+                  // Co-op  : blue ↔ green
+                  // Compete: blue ↔ red
+                  final hostColor = invite['hostColor'] as String? ?? 'blue';
+                  String joinerColor;
+                  if (isCompete) {
+                    joinerColor = hostColor.toLowerCase() == 'blue' ? 'red' : 'blue';
+                  } else {
+                    joinerColor = hostColor.toLowerCase() == 'blue' ? 'green' : 'blue';
+                  }
+
                   // Navigate to play screen
                   Navigator.push(
                     context,
@@ -166,7 +179,7 @@ class _LandingPageState extends State<LandingPage> {
                       builder: (context) => PeersPlayScreen(
                         isCompeteMode: isCompete,
                         opponentId: invite['fromPlayerId'],
-                        playerColor: isCompete ? 'red' : 'green', // Host gets blue, Joiner gets red/green
+                        playerColor: joinerColor,
                         matchCount: matchCount,
                         matchBoards: boards,
                       ),
@@ -361,7 +374,7 @@ class _LandingPageState extends State<LandingPage> {
           borderRadius: BorderRadius.circular(25),
           border: Border.all(color: AppColors.gold, width: 3),
           boxShadow: [
-            BoxShadow(color: AppColors.gold.withOpacity(0.2), offset: const Offset(6, 6)),
+            BoxShadow(color: AppColors.gold.withValues(alpha: 0.2), offset: const Offset(6, 6)),
           ],
         ),
         child: Row(
@@ -398,7 +411,7 @@ class _LandingPageState extends State<LandingPage> {
               borderRadius: BorderRadius.circular(25),
               border: Border.all(color: AppColors.navyBlue, width: 3),
               boxShadow: [
-                BoxShadow(color: AppColors.navyBlue.withOpacity(0.3), offset: const Offset(10, 10)),
+                BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.3), offset: const Offset(10, 10)),
               ],
             ),
             child: ClipRRect(
@@ -457,7 +470,7 @@ class _LandingPageState extends State<LandingPage> {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: AppColors.navyBlue, width: 2),
           boxShadow: [
-            BoxShadow(color: AppColors.navyBlue.withOpacity(0.15), offset: const Offset(6, 6)),
+            BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.15), offset: const Offset(6, 6)),
           ],
         ),
         child: Row(

@@ -15,13 +15,13 @@ class NotebookPainter extends CustomPainter {
 
     // Draw vertical margin line
     final marginPaint = Paint()
-      ..color = Colors.red.withOpacity(0.15)
+      ..color = Colors.red.withValues(alpha: 0.15)
       ..strokeWidth = 1.5;
     canvas.drawLine(const Offset(60, 0), Offset(60, size.height), marginPaint);
 
     // Draw some subtle "doodles" or artifacts
     final doodlePaint = Paint()
-      ..color = AppColors.navyBlue.withOpacity(0.05)
+      ..color = AppColors.navyBlue.withValues(alpha: 0.05)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
 

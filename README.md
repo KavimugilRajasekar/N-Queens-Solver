@@ -22,11 +22,20 @@ The puzzle variant used here is a regional extension of the classic problem: the
 
 ### Multiplayer
 
-Two modes, one connection system.
+Two modes, one connection system. The **Host** selects their piece colour at match setup. The **Peer (Joiner)** is automatically assigned the complementary colour so the two are always distinct and never clash:
 
-**Combine Solving (Co-op)** — Both players share a single board. Every cell tap one player makes is mirrored on the other player's screen in real time via Firebase Realtime Database. Queens placed by you appear in blue; queens placed by your partner appear in green. The board is solved when the combined placement satisfies all N-Queens constraints. Both players win together.
+| Mode | Host picks | Peer gets |
+|---|---|---|
+| Combine Solving (Co-op) | Blue | Green |
+| Combine Solving (Co-op) | Green | Blue |
+| Competing (Duel) | Blue | Red |
+| Competing (Duel) | Red | Blue |
 
-**Competing (Duel)** — Each player gets their own independent copy of the same board. You race to solve it first. Your moves stay on your screen; you only see your opponent's progress as a queen counter ("Placing Queens... 3/8"). First to solve wins the round. Play best-of-1, best-of-3, or best-of-5.
+The host's chosen colour is stored in Firebase alongside the room data. When the peer accepts the invite, their client reads `hostColor` and derives the correct complement automatically — no manual coordination needed.
+
+**Combine Solving (Co-op)** — Both players share a single board. Every cell tap one player makes is mirrored on the other player's screen in real time via Firebase Realtime Database. Piece colours on the combined board represent each player's respective choice (e.g. blue pieces = host, green pieces = peer). The board is solved when the combined placement satisfies all N-Queens constraints. Both players win together.
+
+**Competing (Duel)** — Each player gets their own independent copy of the same board. You race to solve it first. Your moves stay on your screen; you only see your opponent's progress as a queen counter ("Placing Queens... 3/8"). Piece colours on each player's board represent their own chosen colour. First to solve wins the round. Play best-of-1, best-of-3, or best-of-5.
 
 Both modes support series play. The host configures the number of matches and the board source (auto-generated or from their library). Board data is stored in Firebase RTDB — it never travels through FCM, so there is no size limit.
 
@@ -38,8 +47,8 @@ Both modes support series play. The host configures the number of matches and th
 Host app                    Vercel Server              Firebase RTDB          Guest app
    |                              |                          |                     |
    |-- POST /create-room -------->|                          |                     |
-   |   {boards, matchCount...}    |-- PUT /rooms/{id} ------>|                     |
-   |                              |-- FCM push --------------|-------------------->|
+   |   {boards, matchCount,       |-- PUT /rooms/{id} ------>|                     |
+   |    hostColor, ...}           |-- FCM push --------------|-------------------->|
    |<-- {roomId} ----------------|                          |                     |
    |                              |                          |                     |
    |-- RTDB onValue(rooms/{id}) --|------------------------->|                     |
@@ -78,6 +87,24 @@ Host app                    Vercel Server              Firebase RTDB          Gu
 
 ---
 
+## Automatic update notifications
+
+On every launch the app silently checks the GitHub Releases API:
+
+```
+GET https://api.github.com/repos/KavimugilRajasekar/N-Queens-Solver/releases/latest
+```
+
+The app reads its own installed version at runtime via `package_info_plus` (always in sync with `pubspec.yaml` — no hardcoded strings). If the GitHub `tag_name` is semantically newer, a stylish popup appears with:
+
+- The new version number
+- A **DOWNLOAD NOW** button that opens the GitHub release page in the browser
+- A **Maybe Later** dismiss link
+
+The notification is shown **once per new version**. If the user dismisses and relaunches, they will not be prompted again for the same version (tracked via `SharedPreferences`).
+
+---
+
 ## Player identity
 
 Each device generates a deterministic 6-digit ID (`NQ-XXXXXX`) from hardware info on first launch and stores it in `SharedPreferences`. This ID is registered with the Vercel server along with the FCM token, nickname, and icon. Other players invite you by entering your 6-digit number.
@@ -93,7 +120,7 @@ lib/
 │   ├── colors.dart                  # App-wide colour palette
 │   └── region_colors.dart           # Per-region colour assignment
 ├── screens/
-│   ├── landing_page.dart            # Home screen; listens for incoming FCM invites
+│   ├── landing_page.dart            # Home screen; listens for FCM invites + update check
 │   ├── compete_mode_screen.dart     # Player profile setup (nickname, icon, ID)
 │   ├── match_setup_screen.dart      # Host configures match and initiates connection
 │   ├── peers_play_screen.dart       # Live multiplayer board (co-op + compete)
@@ -102,6 +129,7 @@ lib/
 │   └── camera_screen.dart           # Camera capture flow
 ├── utils/
 │   ├── firebase_game_manager.dart   # All multiplayer logic (singleton)
+│   ├── update_service.dart          # GitHub release check + update popup
 │   ├── board_processor.dart         # Image upload and region text parsing
 │   ├── board_generator.dart         # On-device BFS board generation
 │   ├── solver_logic.dart            # Backtracking solver with step streaming
@@ -123,12 +151,14 @@ lib/
 | `firebase_core` | ^4.9.0 | Firebase initialisation |
 | `firebase_messaging` | ^16.2.2 | FCM push notifications (invite delivery only) |
 | `firebase_database` | ^12.4.1 | Real-time game state sync |
-| `http` | ^1.6.0 | REST calls to Vercel server |
-| `shared_preferences` | ^2.5.2 | Player ID / nickname / icon persistence |
+| `http` | ^1.6.0 | REST calls to Vercel server + GitHub Releases API |
+| `shared_preferences` | ^2.5.2 | Player ID / nickname / icon / update notification persistence |
 | `camera` | ^0.11.0+1 | Board photo capture |
 | `mobile_scanner` | ^7.2.0 | QR code scanning |
 | `encrypt` | ^5.0.3 | AES-CBC QR encryption |
 | `device_info_plus` | ^13.1.0 | Hardware-based player ID generation |
+| `package_info_plus` | ^10.1.0 | Read installed app version for update check |
+| `url_launcher` | ^6.3.0 | Open GitHub release page in browser |
 | `lottie` | ^3.3.1 | Animations (trophy, cat loader, etc.) |
 | `pretty_qr_code` | ^3.6.0 | QR code rendering |
 | `share_plus` | ^13.1.0 | Share board images |
@@ -165,3 +195,5 @@ flutter run
 | Incoming `round_over` arrives after local win detection | Same `_roundEndedForCurrentMatch` guard applied to the incoming message handler |
 | `roomDeletedNotifier` fires after `dispose()` removed the listener | Listener removed before `disconnect()` is called; notifier reset to `false` for next session |
 | `sendMessage` called inside `setState` (async in sync context) | Moved outside `setState`; fire-and-forget is safe since we don't need the return value |
+| Peer always receives wrong colour (hardcoded `'red'`/`'green'`) | `hostColor` now stored in RTDB room; peer derives complement dynamically on accept |
+| GitHub version check runs on every launch causing repeated prompts | `SharedPreferences` key `update_last_notified_version` prevents re-prompting for same version |

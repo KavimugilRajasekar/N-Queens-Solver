@@ -17,7 +17,7 @@ class FunkyErrorDialog {
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: AppColors.navyBlue, width: 2.5),
               boxShadow: [
-                BoxShadow(color: AppColors.navyBlue.withOpacity(0.25), offset: const Offset(8, 8)),
+                BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.25), offset: const Offset(8, 8)),
               ],
             ),
             child: Column(
@@ -58,7 +58,7 @@ class FunkyErrorDialog {
                         color: AppColors.gold,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: AppColors.navyBlue, width: 2),
-                        boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.15), offset: const Offset(4, 4))],
+                        boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.15), offset: const Offset(4, 4))],
                       ),
                       child: const Center(
                         child: Text('Got it!', style: TextStyle(fontFamily: 'DynaPuff', fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),

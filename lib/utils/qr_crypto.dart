@@ -1,5 +1,4 @@
 import 'package:encrypt/encrypt.dart';
-import 'dart:convert';
 
 class QRCrypto {
   // Hardcoded key provided by the user (256-bit hex)

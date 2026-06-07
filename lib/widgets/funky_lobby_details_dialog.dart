@@ -57,7 +57,7 @@ class FunkyLobbyDetailsDialog extends StatelessWidget {
                     Container(
                       height: 4,
                       width: double.infinity,
-                      color: Colors.redAccent.withOpacity(0.3),
+                      color: Colors.redAccent.withValues(alpha: 0.3),
                     ),
                     const SizedBox(height: 10),
                     // Funky Header Sticker
@@ -87,7 +87,7 @@ class FunkyLobbyDetailsDialog extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: AppColors.paperLine.withOpacity(0.3),
+                            color: AppColors.paperLine.withValues(alpha: 0.3),
                             borderRadius: BorderRadius.circular(15),
                             border: Border.all(color: AppColors.navyBlue, width: 1),
                           ),

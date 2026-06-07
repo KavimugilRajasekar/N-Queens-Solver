@@ -1,7 +1,5 @@
 import 'dart:io';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:lottie/lottie.dart';
 import '../widgets/error_dialog.dart';
 import 'package:camera/camera.dart';
 import '../constants/colors.dart';
@@ -158,7 +156,7 @@ class _CameraScreenState extends State<CameraScreen> with SingleTickerProviderSt
                 if (_isProcessing)
                   Positioned.fill(
                     child: Container(
-                      color: Colors.black.withOpacity(0.3),
+                      color: Colors.black.withValues(alpha: 0.3),
                       child: Stack(
                         children: [
                           Positioned(
@@ -173,7 +171,7 @@ class _CameraScreenState extends State<CameraScreen> with SingleTickerProviderSt
                                   borderRadius: BorderRadius.circular(15),
                                   border: Border.all(color: AppColors.gold, width: 3),
                                   boxShadow: [
-                                    BoxShadow(color: AppColors.navyBlue.withOpacity(0.3), offset: const Offset(4, 4)),
+                                    BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.3), offset: const Offset(4, 4)),
                                   ],
                                 ),
                                 child: Row(
@@ -237,7 +235,7 @@ class _CameraScreenState extends State<CameraScreen> with SingleTickerProviderSt
               backgroundColor: Colors.white,
               padding: const EdgeInsets.all(12),
               elevation: 8,
-              shadowColor: AppColors.navyBlue.withOpacity(0.4),
+              shadowColor: AppColors.navyBlue.withValues(alpha: 0.4),
             ),
           ),
         ),
@@ -264,7 +262,7 @@ class _CameraScreenState extends State<CameraScreen> with SingleTickerProviderSt
     return Stack(
       children: [
         ColorFiltered(
-          colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.3), BlendMode.srcOut),
+          colorFilter: ColorFilter.mode(Colors.black.withValues(alpha: 0.3), BlendMode.srcOut),
           child: Stack(
             children: [
               Container(decoration: const BoxDecoration(color: Colors.black, backgroundBlendMode: BlendMode.dstOut)),
@@ -331,7 +329,7 @@ class _CameraScreenState extends State<CameraScreen> with SingleTickerProviderSt
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: AppColors.navyBlue.withOpacity(0.3),
+                color: AppColors.navyBlue.withValues(alpha: 0.3),
                 offset: const Offset(10, 10),
                 blurRadius: 0,
               ),

@@ -51,10 +51,13 @@ dependencies:
   shake: ^3.0.0
   shared_preferences: ^2.5.2
   device_info_plus: ^13.1.0
+  package_info_plus: ^10.1.0
   firebase_core: ^4.9.0
   firebase_messaging: ^16.2.2
   firebase_database: ^12.4.1
+  url_launcher: ^6.3.0
 
+  http_parser: any
 dev_dependencies:
   flutter_test:
     sdk: flutter

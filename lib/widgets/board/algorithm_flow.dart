@@ -27,8 +27,8 @@ class AlgorithmFlow extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(25),
-          border: Border.all(color: AppColors.navyBlue.withOpacity(0.5), width: 2.5),
-          boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.1), offset: const Offset(6, 6))],
+          border: Border.all(color: AppColors.navyBlue.withValues(alpha: 0.5), width: 2.5),
+          boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.1), offset: const Offset(6, 6))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -69,8 +69,8 @@ class _StepItem extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.background,
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: step.isBacktrack ? Colors.red.withOpacity(0.3) : AppColors.navyBlue.withOpacity(0.1)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), offset: const Offset(2, 2))],
+        border: Border.all(color: step.isBacktrack ? Colors.red.withValues(alpha: 0.3) : AppColors.navyBlue.withValues(alpha: 0.1)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), offset: const Offset(2, 2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -101,8 +101,8 @@ class _StepItem extends StatelessWidget {
                     Color cellColor = RegionColors.getRegionColor(boardData.regionIds[r][c], boardData.size);
                     return Container(
                       decoration: BoxDecoration(
-                        color: isValidDomain ? cellColor : cellColor.withOpacity(0.15),
-                        border: Border.all(color: Colors.black.withOpacity(0.03), width: 0.2),
+                        color: isValidDomain ? cellColor : cellColor.withValues(alpha: 0.15),
+                        border: Border.all(color: Colors.black.withValues(alpha: 0.03), width: 0.2),
                       ),
                       child: hasQueen ? const Center(child: Icon(Icons.stars_rounded, size: 10, color: AppColors.navyBlue)) : null,
                     );

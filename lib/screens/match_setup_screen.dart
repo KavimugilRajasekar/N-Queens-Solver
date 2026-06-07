@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:lottie/lottie.dart';
 import 'dart:async';
 import '../constants/colors.dart';
 import '../widgets/notebook_painter.dart';
 import '../utils/storage_manager.dart';
 import '../utils/board_processor.dart';
-import '../constants/region_colors.dart';
 import '../utils/board_generator.dart';
 import '../widgets/funky_loader_dialog.dart';
 import '../widgets/funky_lobby_details_dialog.dart';
@@ -315,6 +313,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
               widget.isCompeteMode,
               _matchCount,
               validMatchBoards,
+              hostColor: _selectedColor ?? 'blue',
             );
           } catch (e) {
             _isConnecting = false;
@@ -393,7 +392,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                           border: Border.all(color: AppColors.navyBlue, width: 2.5),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.navyBlue.withOpacity(0.3),
+                              color: AppColors.navyBlue.withValues(alpha: 0.3),
                               offset: const Offset(4, 4),
                             )
                           ],
@@ -476,7 +475,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: AppColors.navyBlue, width: 2.5),
           boxShadow: [
-            BoxShadow(color: AppColors.navyBlue.withOpacity(0.15), offset: const Offset(6, 6)),
+            BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.15), offset: const Offset(6, 6)),
           ],
         ),
         child: Column(
@@ -530,7 +529,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: AppColors.navyBlue, width: 2.5),
           boxShadow: [
-            BoxShadow(color: AppColors.navyBlue.withOpacity(0.15), offset: const Offset(6, 6)),
+            BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.15), offset: const Offset(6, 6)),
           ],
         ),
         child: Column(
@@ -653,7 +652,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: AppColors.navyBlue, width: 2.5),
           boxShadow: [
-            BoxShadow(color: AppColors.navyBlue.withOpacity(0.15), offset: const Offset(6, 6)),
+            BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.15), offset: const Offset(6, 6)),
           ],
         ),
         child: Column(
@@ -740,7 +739,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
             else
               Container(
                 decoration: BoxDecoration(
-                  color: AppColors.paperLine.withOpacity(0.5),
+                  color: AppColors.paperLine.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: AppColors.navyBlue, width: 1.5),
                 ),
@@ -841,7 +840,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                       ],
                     ),
                     Text(
-                      "${currentSize}x${currentSize}",
+                      "${currentSize}x$currentSize",
                       style: const TextStyle(fontFamily: 'DynaPuff', fontSize: 14, color: AppColors.navyBlue, fontWeight: FontWeight.bold),
                     ),
                   ],
@@ -859,7 +858,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                     activeTrackColor: AppColors.navyBlue,
                     inactiveTrackColor: AppColors.paperLine,
                     thumbColor: AppColors.gold,
-                    overlayColor: AppColors.gold.withOpacity(0.2),
+                    overlayColor: AppColors.gold.withValues(alpha: 0.2),
                     valueIndicatorColor: AppColors.navyBlue,
                     valueIndicatorTextStyle: const TextStyle(fontFamily: 'DynaPuff'),
                   ),
@@ -868,7 +867,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                     min: 4,
                     max: 12,
                     divisions: 8,
-                    label: "${currentSize}x${currentSize}",
+                    label: "${currentSize}x$currentSize",
                     onChanged: (val) => setState(() => _selectedSizes[_currentEditingMatchIndex] = val.toInt()),
                   ),
                 ),
@@ -920,7 +919,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
         children: [
           const Text("SELECT A MASTERED BOARD", style: TextStyle(fontFamily: 'DynaPuff', fontSize: 11, color: AppColors.secondaryText)),
           const SizedBox(height: 10),
-          Container(
+          SizedBox(
             height: 90,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
@@ -1003,7 +1002,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: AppColors.navyBlue, width: 2.5),
           boxShadow: [
-            BoxShadow(color: AppColors.navyBlue.withOpacity(0.15), offset: const Offset(6, 6)),
+            BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.15), offset: const Offset(6, 6)),
           ],
         ),
         child: Column(

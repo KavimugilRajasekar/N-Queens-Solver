@@ -34,7 +34,7 @@ class BoardHeader extends StatelessWidget {
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AppColors.navyBlue, width: 2),
-              boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(4, 4))],
+              boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.2), offset: const Offset(4, 4))],
             ),
             child: Text(
               isManualMode 
@@ -53,7 +53,7 @@ class BoardHeader extends StatelessWidget {
                 color: AppColors.gold,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppColors.navyBlue, width: 2),
-                boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(4, 4))],
+                boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.2), offset: const Offset(4, 4))],
               ),
               child: Text(
                 formattedTime,

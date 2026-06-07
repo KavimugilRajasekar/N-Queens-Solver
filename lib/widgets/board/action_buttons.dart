@@ -47,7 +47,7 @@ class ActionButtons extends StatelessWidget {
                 color: isPaused ? AppColors.gold : Colors.white,
                 borderRadius: BorderRadius.circular(15),
                 border: Border.all(color: AppColors.navyBlue, width: 2),
-                boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(4, 4))],
+                boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.2), offset: const Offset(4, 4))],
               ),
               child: ElevatedButton.icon(
                 onPressed: onTogglePause,
@@ -67,7 +67,7 @@ class ActionButtons extends StatelessWidget {
               width: double.infinity,
               height: 65,
               decoration: BoxDecoration(
-                color: Colors.redAccent.withOpacity(0.1),
+                color: Colors.redAccent.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(15),
                 border: Border.all(color: Colors.redAccent, width: 2),
               ),
@@ -91,7 +91,7 @@ class ActionButtons extends StatelessWidget {
                       color: Colors.white, 
                       borderRadius: BorderRadius.circular(15), 
                       border: Border.all(color: AppColors.navyBlue, width: 2), 
-                      boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.15), offset: const Offset(4, 4))],
+                      boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.15), offset: const Offset(4, 4))],
                     ),
                     child: ElevatedButton.icon(
                       onPressed: isSolving ? null : onToggleEdit,
@@ -113,15 +113,15 @@ class ActionButtons extends StatelessWidget {
                           ? Colors.grey.shade300 
                           : (hasConflicts ? Colors.grey.shade200 : AppColors.gold), 
                       borderRadius: BorderRadius.circular(15), 
-                      border: Border.all(color: AppColors.navyBlue.withOpacity(hasConflicts ? 0.3 : 1.0), width: 2), 
-                      boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(hasConflicts ? 0.05 : 0.2), offset: const Offset(4, 4))]
+                      border: Border.all(color: AppColors.navyBlue.withValues(alpha: hasConflicts ? 0.3 : 1.0), width: 2), 
+                      boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: hasConflicts ? 0.05 : 0.2), offset: const Offset(4, 4))]
                     ),
                     child: ElevatedButton.icon(
                       onPressed: canSolve ? onSolve : (isEditing ? onSaveEdits : null),
                       icon: isSolving 
                           ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.navyBlue)) 
-                          : Icon(isEditing ? Icons.check_circle_rounded : Icons.auto_fix_high_rounded, color: AppColors.navyBlue.withOpacity(hasConflicts && !isEditing ? 0.4 : 1.0)),
-                      label: Text(isSolving ? 'Solving...' : (isEditing ? 'Save' : 'Solve'), style: TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.navyBlue.withOpacity(hasConflicts && !isEditing ? 0.4 : 1.0))),
+                          : Icon(isEditing ? Icons.check_circle_rounded : Icons.auto_fix_high_rounded, color: AppColors.navyBlue.withValues(alpha: hasConflicts && !isEditing ? 0.4 : 1.0)),
+                      label: Text(isSolving ? 'Solving...' : (isEditing ? 'Save' : 'Solve'), style: TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.navyBlue.withValues(alpha: hasConflicts && !isEditing ? 0.4 : 1.0))),
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, elevation: 0),
                     ),
                   ),
@@ -139,7 +139,7 @@ class ActionButtons extends StatelessWidget {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(15),
                 border: Border.all(color: AppColors.navyBlue, width: 2),
-                boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.15), offset: const Offset(4, 4))],
+                boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.15), offset: const Offset(4, 4))],
               ),
               child: ElevatedButton.icon(
                 onPressed: canSolve ? onStartManual : null,
@@ -170,7 +170,7 @@ class ActionButtons extends StatelessWidget {
           color: const Color(0xFFFFF9C4), // Soft Lemon Yellow
           borderRadius: BorderRadius.circular(15),
           border: Border.all(color: AppColors.gold, width: 2),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), offset: const Offset(4, 4))],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), offset: const Offset(4, 4))],
         ),
         child: const Row(
           children: [

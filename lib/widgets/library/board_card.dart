@@ -43,12 +43,12 @@ class LibraryBoardCard extends StatelessWidget {
         color: board.isManuallySolved ? const Color(0xFFFFFDE7) : Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: board.isManuallySolved ? AppColors.gold.withOpacity(0.5) : AppColors.navyBlue.withOpacity(0.2), 
+          color: board.isManuallySolved ? AppColors.gold.withValues(alpha: 0.5) : AppColors.navyBlue.withValues(alpha: 0.2), 
           width: board.isManuallySolved ? 2 : 1.5
         ),
         boxShadow: [
           BoxShadow(
-            color: board.isManuallySolved ? AppColors.gold.withOpacity(0.1) : AppColors.navyBlue.withOpacity(0.05), 
+            color: board.isManuallySolved ? AppColors.gold.withValues(alpha: 0.1) : AppColors.navyBlue.withValues(alpha: 0.05), 
             offset: const Offset(4, 4)
           )
         ],
@@ -77,7 +77,7 @@ class LibraryBoardCard extends StatelessWidget {
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.6),
+                  color: Colors.white.withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: const Center(
@@ -97,7 +97,7 @@ class LibraryBoardCard extends StatelessWidget {
                   color: isSelected ? AppColors.navyBlue : Colors.white,
                   shape: BoxShape.circle,
                   border: Border.all(color: AppColors.navyBlue, width: 2),
-                  boxShadow: isSelected ? [BoxShadow(color: AppColors.navyBlue.withOpacity(0.3), blurRadius: 4, offset: const Offset(2, 2))] : null,
+                  boxShadow: isSelected ? [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.3), blurRadius: 4, offset: const Offset(2, 2))] : null,
                 ),
                 child: Center(
                   child: isSelected 
@@ -153,7 +153,7 @@ class LibraryBoardCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.background, 
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.navyBlue.withOpacity(0.1)),
+        border: Border.all(color: AppColors.navyBlue.withValues(alpha: 0.1)),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(6),

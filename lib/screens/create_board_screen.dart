@@ -192,7 +192,7 @@ class _CreateBoardScreenState extends State<CreateBoardScreen> {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: AppColors.navyBlue, width: 3),
-                boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(8, 8))],
+                boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.2), offset: const Offset(8, 8))],
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
@@ -210,7 +210,7 @@ class _CreateBoardScreenState extends State<CreateBoardScreen> {
                       return GestureDetector(
                         onTap: () => _handleCellTap(r, c),
                         child: Container(
-                          decoration: BoxDecoration(color: color, border: Border.all(color: Colors.black.withOpacity(0.05), width: 0.5)),
+                          decoration: BoxDecoration(color: color, border: Border.all(color: Colors.black.withValues(alpha: 0.05), width: 0.5)),
                           child: id > 0 
                             ? Center(
                                 child: Text(
@@ -218,7 +218,7 @@ class _CreateBoardScreenState extends State<CreateBoardScreen> {
                                   style: TextStyle(
                                     fontFamily: 'DynaPuff', 
                                     fontSize: (MediaQuery.of(context).size.width * 0.8 * 0.3) / _size, 
-                                    color: Colors.black.withOpacity(0.15), 
+                                    color: Colors.black.withValues(alpha: 0.15), 
                                     fontWeight: FontWeight.bold
                                   )
                                 )
@@ -261,7 +261,7 @@ class _CreateBoardScreenState extends State<CreateBoardScreen> {
             border: Border.all(color: AppColors.navyBlue, width: 2.5),
             boxShadow: [
               BoxShadow(
-                color: AppColors.navyBlue.withOpacity(0.3),
+                color: AppColors.navyBlue.withValues(alpha: 0.3),
                 offset: const Offset(5, 5),
                 blurRadius: 0,
               )
@@ -286,7 +286,7 @@ class _CreateBoardScreenState extends State<CreateBoardScreen> {
           color: color,
           shape: BoxShape.circle,
           border: Border.all(color: isSelected ? AppColors.navyBlue : Colors.white, width: isSelected ? 3 : 2),
-          boxShadow: [if (isSelected) BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), blurRadius: 8)],
+          boxShadow: [if (isSelected) BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.2), blurRadius: 8)],
         ),
         child: Center(child: Text('$id', style: TextStyle(fontWeight: FontWeight.bold, color: isSelected ? AppColors.navyBlue : Colors.black54))),
       ),
@@ -302,7 +302,7 @@ class _CreateBoardScreenState extends State<CreateBoardScreen> {
         decoration: BoxDecoration(
           color: AppColors.gold,
           borderRadius: BorderRadius.circular(15),
-          boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(5, 5))],
+          boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.2), offset: const Offset(5, 5))],
           border: Border.all(color: AppColors.navyBlue, width: 2),
         ),
         child: ElevatedButton(

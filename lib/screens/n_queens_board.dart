@@ -48,7 +48,7 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
   bool _isPaused = false;
   int _secondsElapsed = 0;
   Timer? _timer;
-  Map<String, int> _manualGrid = {}; // "r,c" -> 0: empty, 1: X, 2: Queen
+  final Map<String, int> _manualGrid = {}; // "r,c" -> 0: empty, 1: X, 2: Queen
 
   @override
   void initState() {
@@ -200,7 +200,7 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
       Map<int, int> rows = {}, cols = {}, regions = {};
       bool conflict = false;
 
-      _queenPositions.values.forEach((p) {
+      for (var p in _queenPositions.values) {
         int r = p.x - 1;
         int c = p.y - 1;
         int regId = widget.boardData.regionIds[r][c];
@@ -211,11 +211,11 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
 
         if (rows[r]! > 1 || cols[c]! > 1 || regions[regId]! > 1) conflict = true;
         
-        _queenPositions.values.forEach((p2) {
-          if (p == p2) return;
+        for (var p2 in _queenPositions.values) {
+          if (p == p2) continue;
           if ((p.x - p2.x).abs() <= 1 && (p.y - p2.y).abs() <= 1) conflict = true;
-        });
-      });
+        }
+      }
 
       if (!conflict && regions.length == widget.boardData.size) {
         _timer?.cancel();
@@ -546,7 +546,7 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
               child: Container(
                 width: double.infinity,
                 height: 65,
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.1), offset: const Offset(4, 4))], border: Border.all(color: AppColors.navyBlue.withOpacity(0.3), width: 1.5)),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.1), offset: const Offset(4, 4))], border: Border.all(color: AppColors.navyBlue.withValues(alpha: 0.3), width: 1.5)),
                 child: ElevatedButton.icon(
                   onPressed: () async {
                     final id = await StorageManager.saveBoard(widget.boardData);
@@ -569,7 +569,7 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
           child: Container(
             width: double.infinity,
             height: 65,
-            decoration: BoxDecoration(color: AppColors.gold, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(5, 5))], border: Border.all(color: AppColors.navyBlue, width: 2.5)),
+            decoration: BoxDecoration(color: AppColors.gold, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.2), offset: const Offset(5, 5))], border: Border.all(color: AppColors.navyBlue, width: 2.5)),
             child: ElevatedButton.icon(
               onPressed: _isSolving ? null : () => Navigator.pop(context),
               icon: const Icon(Icons.library_books_rounded, size: 28),

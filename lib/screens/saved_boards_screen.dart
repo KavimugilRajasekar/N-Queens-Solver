@@ -1,23 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'package:lottie/lottie.dart';
 import 'dart:convert';
-import 'package:pretty_qr_code/pretty_qr_code.dart';
 import '../constants/colors.dart';
 import '../utils/board_processor.dart';
-import '../constants/region_colors.dart';
 import '../utils/storage_manager.dart';
 import '../widgets/notebook_painter.dart';
 import 'camera_screen.dart';
 import 'create_board_screen.dart';
-import 'n_queens_board.dart';
 import 'qr_scanner_screen.dart';
 import '../widgets/library/board_card.dart';
 import '../widgets/library/qr_share_dialog.dart';
 
-import '../utils/board_generator.dart';
 import '../widgets/error_dialog.dart';
-import '../widgets/success_dialog.dart';
 import 'generate_board_screen.dart';
 import '../utils/qr_crypto.dart';
 import 'package:shake/shake.dart';
@@ -125,7 +119,7 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppColors.navyBlue.withOpacity(0.1), width: 2),
+                      border: Border.all(color: AppColors.navyBlue.withValues(alpha: 0.1), width: 2),
                     ),
                     child: Row(
                       children: [
@@ -212,7 +206,7 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
                 border: Border.all(color: AppColors.navyBlue, width: 2),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.navyBlue.withOpacity(0.2),
+                    color: AppColors.navyBlue.withValues(alpha: 0.2),
                     offset: const Offset(4, 4),
                     blurRadius: 0,
                   )
@@ -244,8 +238,8 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.navyBlue.withOpacity(0.1), width: 2),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), offset: const Offset(4, 4))],
+          border: Border.all(color: AppColors.navyBlue.withValues(alpha: 0.1), width: 2),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), offset: const Offset(4, 4))],
         ),
         child: Row(
           children: [
@@ -303,7 +297,7 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
                               border: Border.all(color: AppColors.navyBlue, width: 2),
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppColors.navyBlue.withOpacity(0.3),
+                                  color: AppColors.navyBlue.withValues(alpha: 0.3),
                                   offset: const Offset(3, 3),
                                   blurRadius: 0,
                                 )
@@ -367,7 +361,7 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.library_books_rounded, size: 80, color: AppColors.navyBlue.withOpacity(0.1)),
+          Icon(Icons.library_books_rounded, size: 80, color: AppColors.navyBlue.withValues(alpha: 0.1)),
           const SizedBox(height: 16),
           const Text('Your library is empty', style: TextStyle(fontFamily: 'DynaPuff', fontSize: 20, color: AppColors.secondaryText)),
           const Text('Scan or create your first board!', style: TextStyle(fontFamily: 'Comfortaa', color: AppColors.secondaryText)),
@@ -441,7 +435,7 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
           decoration: BoxDecoration(
             color: _selectedIds.isEmpty ? Colors.grey.shade300 : AppColors.gold,
             borderRadius: BorderRadius.circular(15),
-            boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(5, 5))],
+            boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.2), offset: const Offset(5, 5))],
             border: Border.all(color: AppColors.navyBlue, width: 2),
           ),
           child: ElevatedButton.icon(
@@ -492,7 +486,7 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
                   border: Border.all(color: AppColors.navyBlue, width: 2.5),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.navyBlue.withOpacity(0.3), 
+                      color: AppColors.navyBlue.withValues(alpha: 0.3), 
                       offset: const Offset(5, 5),
                       blurRadius: 0, // Sharp shadow for sticker look
                     )
@@ -512,7 +506,7 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
                 decoration: BoxDecoration(
                   color: AppColors.gold,
                   borderRadius: BorderRadius.circular(15),
-                  boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(5, 5))],
+                  boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.2), offset: const Offset(5, 5))],
                   border: Border.all(color: AppColors.navyBlue, width: 2),
                 ),
                 child: ElevatedButton.icon(

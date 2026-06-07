@@ -45,7 +45,7 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
   // Timers & Stats
   int _secondsElapsed = 0;
   Timer? _gameTimer;
-  bool _isPaused = false;
+  final bool _isPaused = false;
   String _latestActivityLog = "Match initiated! Link established.";
 
   // Mock Multiplayer Simulator triggers
@@ -577,7 +577,7 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
               borderRadius: BorderRadius.circular(25),
               border: Border.all(color: AppColors.navyBlue, width: 2.5),
               boxShadow: [
-                BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(6, 6)),
+                BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.2), offset: const Offset(6, 6)),
               ],
             ),
             child: Column(
@@ -623,7 +623,7 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
                         borderRadius: BorderRadius.circular(15),
                         border: Border.all(color: AppColors.navyBlue, width: 2),
                         boxShadow: [
-                          BoxShadow(color: AppColors.navyBlue.withOpacity(0.15), offset: const Offset(4, 4)),
+                          BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.15), offset: const Offset(4, 4)),
                         ],
                       ),
                       child: Center(
@@ -825,7 +825,7 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
                 width: 32, height: 32,
                 fit: BoxFit.contain,
                 filterQuality: FilterQuality.high,
-                errorBuilder: (_, __, ___) =>
+                errorBuilder: (_, _, _) =>
                     Icon(Icons.person_rounded, size: 32, color: myColor),
               ),
               const SizedBox(height: 4),
@@ -869,7 +869,7 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
                 width: 32, height: 32,
                 fit: BoxFit.contain,
                 filterQuality: FilterQuality.high,
-                errorBuilder: (_, __, ___) =>
+                errorBuilder: (_, _, _) =>
                     Icon(Icons.person_rounded, size: 32, color: partnerColor),
               ),
               const SizedBox(height: 4),
@@ -938,7 +938,7 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
                 width: 32, height: 32,
                 fit: BoxFit.contain,
                 filterQuality: FilterQuality.high,
-                errorBuilder: (_, __, ___) =>
+                errorBuilder: (_, _, _) =>
                     Icon(Icons.person_rounded, size: 32, color: myColor),
               ),
               const SizedBox(height: 4),
@@ -990,7 +990,7 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
                 width: 32, height: 32,
                 fit: BoxFit.contain,
                 filterQuality: FilterQuality.high,
-                errorBuilder: (_, __, ___) =>
+                errorBuilder: (_, _, _) =>
                     Icon(Icons.person_rounded, size: 32, color: opponentColor),
               ),
               const SizedBox(height: 4),
@@ -1129,7 +1129,7 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
                     decoration: BoxDecoration(
                       color: RegionColors.getRegionColor(regId, _currentBoard.size),
                       border: Border.all(
-                        color: Colors.black.withOpacity(0.06), 
+                        color: Colors.black.withValues(alpha: 0.06), 
                         width: 0.5,
                       ),
                     ),
@@ -1137,11 +1137,11 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
                       children: [
                         // Row/Col background conflict tint
                         if (isRowConflict || isColConflict)
-                          Container(color: Colors.red.withOpacity(0.08)),
+                          Container(color: Colors.red.withValues(alpha: 0.08)),
 
                         // Colored highlight indicating cell ownership marker
                         if (cellVal > 0 && !isQueenConflict)
-                          Container(color: ownerColor.withOpacity(0.12)),
+                          Container(color: ownerColor.withValues(alpha: 0.12)),
 
                         // Low-opacity conflict cross behind icons
                         if (isRegionConflict || isRowConflict || isColConflict || isQueenConflict || isNeighborhoodConflict)
@@ -1164,7 +1164,7 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
                               style: TextStyle(
                                 fontFamily: 'Comfortaa',
                                 fontSize: (gridWidth * 0.5) / _currentBoard.size,
-                                color: ownerColor.withOpacity(0.65),
+                                color: ownerColor.withValues(alpha: 0.65),
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -1509,7 +1509,7 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
                                 height: 28,
                                 fit: BoxFit.contain,
                                 filterQuality: FilterQuality.high,
-                                errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, size: 28),
+                                errorBuilder: (_, _, _) => const Icon(Icons.person_rounded, size: 28),
                               ),
                               const SizedBox(width: 10),
                               Text(
@@ -1539,7 +1539,7 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
                                 height: 28,
                                 fit: BoxFit.contain,
                                 filterQuality: FilterQuality.high,
-                                errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, size: 28),
+                                errorBuilder: (_, _, _) => const Icon(Icons.person_rounded, size: 28),
                               ),
                               const SizedBox(width: 10),
                               Text(

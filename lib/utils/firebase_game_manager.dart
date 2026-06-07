@@ -147,6 +147,7 @@ class FirebaseGameManager {
         'isCompeteMode': room['isCompeteMode'] ?? false,
         'matchCount':    room['matchCount']    ?? 3,
         'matchBoards':   room['matchBoards']   ?? '[]',
+        'hostColor':     room['hostColor']     ?? 'blue',
         'roomId':        roomId,
       };
     } catch (e) {
@@ -218,8 +219,9 @@ class FirebaseGameManager {
     String peerId,
     bool isCompeteMode,
     int matchCount,
-    List<BoardData> matchBoards,
-  ) async {
+    List<BoardData> matchBoards, {
+    String hostColor = 'blue',
+  }) async {
     isHost = true;
     activePeerId = peerId;
     _guestJoinHandled = false;
@@ -258,6 +260,7 @@ class FirebaseGameManager {
         'isCompeteMode': isCompeteMode,
         'matchCount':    matchCount,
         'matchBoards':   serializeBoards(matchBoards),
+        'hostColor':     hostColor,
       }),
     ).timeout(const Duration(seconds: 10));
 
@@ -353,11 +356,11 @@ class FirebaseGameManager {
     // if the host responds before our listener is registered we will still
     // see the 'active' status on the first event.
     _roomSubscription?.cancel();
-    bool _connectionCompleted = false;
+    bool connectionCompleted = false;
     final completer = Completer<void>();
 
     _roomSubscription = roomRef.onValue.listen((event) {
-      if (_connectionCompleted) return; // guard against re-entry
+      if (connectionCompleted) return; // guard against re-entry
 
       if (!event.snapshot.exists) {
         // Room deleted before we connected
@@ -373,7 +376,7 @@ class FirebaseGameManager {
       final hostReady = data['hostReady'] == true;
 
       if (status == 'active' || hostReady) {
-        _connectionCompleted = true;
+        connectionCompleted = true;
         _roomSubscription?.cancel();
         _roomSubscription = null;
         if (!completer.isCompleted) completer.complete();
