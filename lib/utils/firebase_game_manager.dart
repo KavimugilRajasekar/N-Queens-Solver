@@ -218,6 +218,7 @@ class FirebaseGameManager {
 
   /// Persist a player to the recent-opponents list in SharedPreferences.
   /// Called by both the host (after validation) and the guest (after accepting).
+  /// Always normalizes IDs to bare digits for storage so duplicates are impossible.
   static Future<void> saveRecentOpponent(String id, String nickname, String icon) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -227,15 +228,21 @@ class FirebaseGameManager {
         final decoded = jsonDecode(jsonStr) as List<dynamic>;
         list = decoded.map((e) => Map<String, String>.from(e as Map)).toList();
       }
-      // Ensure id is always stored with the NQ- prefix for consistency
-      String normalizedId = id.trim();
-      if (!normalizedId.startsWith('NQ-')) normalizedId = 'NQ-$normalizedId';
 
-      list.removeWhere((o) => o['id'] == normalizedId);
-      list.insert(0, {'id': normalizedId, 'nickname': nickname, 'icon': icon});
+      // Normalize to bare 6-digit key — strip any NQ- prefix for dedup
+      final bareId = id.trim().replaceAll('NQ-', '').replaceAll('nq-', '');
+
+      // Remove ALL existing entries that match, regardless of how they were stored
+      list.removeWhere((o) {
+        final storedBare = (o['id'] ?? '').replaceAll('NQ-', '').replaceAll('nq-', '');
+        return storedBare == bareId;
+      });
+
+      // Store with the NQ- prefix for display
+      list.insert(0, {'id': 'NQ-$bareId', 'nickname': nickname, 'icon': icon});
       if (list.length > 10) list = list.sublist(0, 10);
       await prefs.setString('recent_opponents', jsonEncode(list));
-      debugPrint('Saved recent opponent: $normalizedId ($nickname)');
+      debugPrint('Saved recent opponent: NQ-$bareId ($nickname)');
     } catch (e) {
       debugPrint('saveRecentOpponent error: $e');
     }

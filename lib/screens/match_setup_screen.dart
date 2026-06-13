@@ -71,9 +71,26 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
     final jsonStr = prefs.getString('recent_opponents');
     if (jsonStr != null) {
       final List<dynamic> decoded = jsonDecode(jsonStr);
-      setState(() {
-        _recentOpponents = decoded.map((e) => Map<String, String>.from(e)).toList();
-      });
+      final raw = decoded.map((e) => Map<String, String>.from(e as Map)).toList();
+
+      // Deduplicate on load — normalize every stored id to bare digits,
+      // keep only the first occurrence (most recent) of each player.
+      final seen = <String>{};
+      final deduped = <Map<String, String>>[];
+      for (final entry in raw) {
+        final bareId = (entry['id'] ?? '').replaceAll('NQ-', '').replaceAll('nq-', '');
+        if (bareId.isNotEmpty && seen.add(bareId)) {
+          // Re-store with canonical NQ- prefix in case old entry was bare
+          deduped.add({...entry, 'id': 'NQ-$bareId'});
+        }
+      }
+
+      // If we cleaned something up, persist the fixed list back
+      if (deduped.length != raw.length) {
+        await prefs.setString('recent_opponents', jsonEncode(deduped));
+      }
+
+      setState(() => _recentOpponents = deduped);
     }
   }
 
@@ -515,9 +532,10 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
     bool anyChange = false;
     final updated = List<Map<String, String>>.from(_recentOpponents);
     for (int i = 0; i < updated.length; i++) {
-      final rawId = updated[i]['id'] ?? '';
+      // Pass bare digits — fetchPeerProfile / checkPeerValid prepends NQ- itself
+      final bareId = (updated[i]['id'] ?? '').replaceAll('NQ-', '').replaceAll('nq-', '');
       try {
-        final profile = await FirebaseGameManager.instance.fetchPeerProfile(rawId);
+        final profile = await FirebaseGameManager.instance.fetchPeerProfile(bareId);
         if (profile != null) {
           final freshNick = profile['nickname'] as String? ?? updated[i]['nickname'] ?? 'Player';
           final freshIcon = profile['icon'] as String? ?? updated[i]['icon'] ?? 'assets/player_icons/crown.png';
@@ -683,17 +701,17 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  // Player icon — border sits behind, icon overlays on top
+                                  // Player icon — border ring sits behind, icon sits on top uncropped
                                   SizedBox(
-                                    width: 38,
-                                    height: 38,
+                                    width: 44,
+                                    height: 44,
                                     child: Stack(
                                       alignment: Alignment.center,
                                       children: [
-                                        // Border ring layer (behind)
+                                        // Border ring (behind)
                                         Container(
-                                          width: 38,
-                                          height: 38,
+                                          width: 44,
+                                          height: 44,
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle,
                                             color: AppColors.navyBlue.withValues(alpha: 0.08),
@@ -703,18 +721,16 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                                             ),
                                           ),
                                         ),
-                                        // Icon layer (on top, slightly larger to overlay border)
-                                        ClipOval(
-                                          child: Image.asset(
-                                            iconPath,
-                                            width: 36,
-                                            height: 36,
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (context, error, _) => const Icon(
-                                              Icons.person_rounded,
-                                              color: AppColors.navyBlue,
-                                              size: 20,
-                                            ),
+                                        // Icon on top — no clip, renders fully
+                                        Image.asset(
+                                          iconPath,
+                                          width: 40,
+                                          height: 40,
+                                          fit: BoxFit.contain,
+                                          errorBuilder: (context, error, _) => const Icon(
+                                            Icons.person_rounded,
+                                            color: AppColors.navyBlue,
+                                            size: 24,
                                           ),
                                         ),
                                       ],
