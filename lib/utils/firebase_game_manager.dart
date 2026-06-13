@@ -216,6 +216,31 @@ class FirebaseGameManager {
   Future<Map<String, dynamic>?> fetchPeerProfile(String peerId) =>
       checkPeerValid(peerId);
 
+  /// Persist a player to the recent-opponents list in SharedPreferences.
+  /// Called by both the host (after validation) and the guest (after accepting).
+  static Future<void> saveRecentOpponent(String id, String nickname, String icon) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString('recent_opponents');
+      List<Map<String, String>> list = [];
+      if (jsonStr != null) {
+        final decoded = jsonDecode(jsonStr) as List<dynamic>;
+        list = decoded.map((e) => Map<String, String>.from(e as Map)).toList();
+      }
+      // Ensure id is always stored with the NQ- prefix for consistency
+      String normalizedId = id.trim();
+      if (!normalizedId.startsWith('NQ-')) normalizedId = 'NQ-$normalizedId';
+
+      list.removeWhere((o) => o['id'] == normalizedId);
+      list.insert(0, {'id': normalizedId, 'nickname': nickname, 'icon': icon});
+      if (list.length > 10) list = list.sublist(0, 10);
+      await prefs.setString('recent_opponents', jsonEncode(list));
+      debugPrint('Saved recent opponent: $normalizedId ($nickname)');
+    } catch (e) {
+      debugPrint('saveRecentOpponent error: $e');
+    }
+  }
+
   /// Update this player's own nickname on the server + locally in SharedPreferences.
   Future<bool> updatePlayerNickname(String newNickname) async {
     try {

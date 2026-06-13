@@ -77,14 +77,8 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
     }
   }
 
-  Future<void> _saveRecentOpponent(String id, String nickname) async {
-    final prefs = await SharedPreferences.getInstance();
-    _recentOpponents.removeWhere((o) => o['id'] == id);
-    _recentOpponents.insert(0, {'id': id, 'nickname': nickname});
-    if (_recentOpponents.length > 10) _recentOpponents = _recentOpponents.sublist(0, 10);
-    await prefs.setString('recent_opponents', jsonEncode(_recentOpponents));
-    if (mounted) setState(() {});
-  }
+  Future<void> _saveRecentOpponent(String id, String nickname, String icon) =>
+      FirebaseGameManager.saveRecentOpponent(id, nickname, icon);
 
   Future<void> _loadMasteredBoards() async {
     if (widget.isCompeteMode) return; // Skip loading library boards in Compete Mode
@@ -176,7 +170,8 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
       return;
     }
 
-    await _saveRecentOpponent(opponentId, peerProfile['nickname'] ?? 'Player');
+    await _saveRecentOpponent(opponentId, peerProfile['nickname'] ?? 'Player', peerProfile['icon'] ?? 'assets/player_icons/crown.png');
+    await _loadRecentOpponents(); // refresh local list so history panel is up to date
 
     // --- STEP 2: SHOW LOBBY CONFIRMATION ---
     showDialog(
@@ -508,15 +503,15 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
   }
 
   /// Called when the history icon is tapped.
-  /// Expands the recent-opponents panel and silently refreshes nicknames in
-  /// the background by re-fetching each peer's latest profile from the server.
+  /// Expands the recent-opponents panel and silently refreshes nicknames + icons
+  /// in the background by re-fetching each peer's latest profile from the server.
   Future<void> _toggleRecentOpponents() async {
     final nowShowing = !_showRecentOpponents;
     setState(() => _showRecentOpponents = nowShowing);
 
     if (!nowShowing || _recentOpponents.isEmpty) return;
 
-    // Silently refresh nicknames from server
+    // Silently refresh nicknames + icons from server
     bool anyChange = false;
     final updated = List<Map<String, String>>.from(_recentOpponents);
     for (int i = 0; i < updated.length; i++) {
@@ -524,9 +519,10 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
       try {
         final profile = await FirebaseGameManager.instance.fetchPeerProfile(rawId);
         if (profile != null) {
-          final fresh = profile['nickname'] as String? ?? updated[i]['nickname'] ?? 'Player';
-          if (fresh != updated[i]['nickname']) {
-            updated[i] = {...updated[i], 'nickname': fresh};
+          final freshNick = profile['nickname'] as String? ?? updated[i]['nickname'] ?? 'Player';
+          final freshIcon = profile['icon'] as String? ?? updated[i]['icon'] ?? 'assets/player_icons/crown.png';
+          if (freshNick != updated[i]['nickname'] || freshIcon != updated[i]['icon']) {
+            updated[i] = {...updated[i], 'nickname': freshNick, 'icon': freshIcon};
             anyChange = true;
           }
         }
@@ -591,22 +587,40 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
             ),
             const SizedBox(height: 10),
 
-            // ── Input field (always visible) ─────────────────────────────
-            TextField(
-              controller: _opponentIdController,
-              keyboardType: TextInputType.number,
-              maxLength: 6,
-              // Fixes emulator input — force software keyboard, no read-only quirks
-              enableInteractiveSelection: true,
-              showCursor: true,
-              style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 2),
-              decoration: const InputDecoration(
-                hintText: 'Enter 6-digit ID...',
-                counterText: "",
-                border: InputBorder.none,
-                hintStyle: TextStyle(color: Colors.grey, fontWeight: FontWeight.normal, letterSpacing: 1),
-                isDense: true,
-              ),
+            // ── Input row: greyed "NQ-" prefix + digits field ────────────
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Static greyed prefix
+                const Text(
+                  'NQ-',
+                  style: TextStyle(
+                    fontFamily: 'Comfortaa',
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 2,
+                    color: Colors.grey,
+                  ),
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _opponentIdController,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    enableInteractiveSelection: true,
+                    showCursor: true,
+                    style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 2),
+                    decoration: const InputDecoration(
+                      hintText: '000000',
+                      counterText: "",
+                      border: InputBorder.none,
+                      hintStyle: TextStyle(color: Colors.grey, fontWeight: FontWeight.normal, letterSpacing: 2),
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ),
+              ],
             ),
             const Divider(color: AppColors.paperLine, thickness: 2),
 
@@ -645,16 +659,13 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                               'RECENTLY CONNECTED',
                               style: TextStyle(fontFamily: 'DynaPuff', fontSize: 10, color: AppColors.navyBlue),
                             ),
-                            const Spacer(),
-                            // Refresh indicator — shows a tiny spinner while fetching
-                            const SizedBox(width: 16, height: 16),
                           ],
                         ),
                         const SizedBox(height: 8),
                         ..._recentOpponents.map((opponent) {
                           final rawId = (opponent['id'] ?? '').replaceAll('NQ-', '');
                           final nickname = opponent['nickname'] ?? 'Player';
-                          final displayId = opponent['id'] ?? rawId;
+                          final iconPath = opponent['icon'] ?? 'assets/player_icons/crown.png';
                           return GestureDetector(
                             onTap: () {
                               setState(() {
@@ -672,7 +683,43 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.person_rounded, color: AppColors.navyBlue, size: 18),
+                                  // Player icon — border sits behind, icon overlays on top
+                                  SizedBox(
+                                    width: 38,
+                                    height: 38,
+                                    child: Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        // Border ring layer (behind)
+                                        Container(
+                                          width: 38,
+                                          height: 38,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: AppColors.navyBlue.withValues(alpha: 0.08),
+                                            border: Border.all(
+                                              color: AppColors.navyBlue.withValues(alpha: 0.35),
+                                              width: 2,
+                                            ),
+                                          ),
+                                        ),
+                                        // Icon layer (on top, slightly larger to overlay border)
+                                        ClipOval(
+                                          child: Image.asset(
+                                            iconPath,
+                                            width: 36,
+                                            height: 36,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (context, error, _) => const Icon(
+                                              Icons.person_rounded,
+                                              color: AppColors.navyBlue,
+                                              size: 20,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Column(
@@ -687,13 +734,30 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                                             color: AppColors.darkText,
                                           ),
                                         ),
-                                        Text(
-                                          displayId,
-                                          style: const TextStyle(
-                                            fontFamily: 'Comfortaa',
-                                            fontSize: 10,
-                                            color: AppColors.secondaryText,
-                                            letterSpacing: 1,
+                                        // ID with greyed NQ- prefix
+                                        RichText(
+                                          text: TextSpan(
+                                            children: [
+                                              const TextSpan(
+                                                text: 'NQ-',
+                                                style: TextStyle(
+                                                  fontFamily: 'Comfortaa',
+                                                  fontSize: 10,
+                                                  color: Colors.grey,
+                                                  letterSpacing: 1,
+                                                ),
+                                              ),
+                                              TextSpan(
+                                                text: rawId,
+                                                style: const TextStyle(
+                                                  fontFamily: 'Comfortaa',
+                                                  fontSize: 10,
+                                                  color: AppColors.secondaryText,
+                                                  letterSpacing: 1,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                       ],
