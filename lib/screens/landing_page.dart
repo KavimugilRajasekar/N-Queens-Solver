@@ -164,6 +164,12 @@ class _LandingPageState extends State<LandingPage> {
               try {
                 // Initialize Joiner Connection
                 await FirebaseGameManager.instance.joinConnection(invite);
+
+                // Save host to recent opponents so they appear in the guest's history too
+                final hostId       = invite['fromPlayerId'] as String? ?? '';
+                final hostNickname = invite['fromNickname'] as String? ?? 'Player';
+                final hostIcon     = invite['fromIcon']     as String? ?? 'assets/player_icons/crown.png';
+                await FirebaseGameManager.saveRecentOpponent(hostId, hostNickname, hostIcon);
                 
                 if (mounted) {
                   Navigator.pop(context); // Dismiss loading dialog

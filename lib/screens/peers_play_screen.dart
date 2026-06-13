@@ -66,6 +66,36 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
 
   StreamSubscription? _gameSubscription;
 
+  // ── Chat state ────────────────────────────────────────────────────────────
+  final List<Map<String, dynamic>> _chatMessages = [];
+  final TextEditingController _chatController = TextEditingController();
+  final ScrollController _chatScrollController = ScrollController();
+  // always open — no toggle
+  bool _quickFireExpanded = false;
+
+  // Pastel chip colours — light tones only
+  static const List<Color> _chipColors = [
+    Color(0xFFFFF9C4), // pale lemon
+    Color(0xFFFFE0B2), // pale peach
+    Color(0xFFC8E6C9), // pale mint
+    Color(0xFFBBDEFB), // pale sky blue
+    Color(0xFFE1BEE7), // pale lavender
+    Color(0xFFFFCDD2), // pale blush
+    Color(0xFFB2EBF2), // pale aqua
+    Color(0xFFDCEDC8), // pale sage
+  ];
+
+  static const List<String> _quickMessages = [
+    'Hey there!',
+    'Thinking...',
+    'Got a Queen!',
+    'Stuck here',
+    'Almost there!',
+    'Nice move!',
+    'Oops!',
+    'Got an idea!',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -146,6 +176,8 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
     _gameTimer?.cancel();
     _mockOpponentActionTimer?.cancel();
     _gameSubscription?.cancel();
+    _chatController.dispose();
+    _chatScrollController.dispose();
     FirebaseGameManager.instance.disconnect(); // asks server to delete room
     super.dispose();
   }
@@ -256,6 +288,49 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
           _gameTimer?.cancel();
           _handleRoundEnded(winner: 'coop');
         }
+        break;
+
+      // ── BOTH MODES: peer sent a chat message ──
+      case 'chat':
+        final String text = data['text'] as String? ?? '';
+        if (text.isNotEmpty) {
+          setState(() {
+            _chatMessages.add({
+              'text': text,
+              'isMe': false,
+              'sender': _opponentNickname,
+              'ts': DateTime.now().millisecondsSinceEpoch,
+            });
+            // kept: no-op now that chat is always visible
+          });
+          _scrollChatToBottom();
+        }
+        break;
+
+      // ── BOTH MODES: peer ended the game — quit simultaneously ──
+      case 'quit_game':
+        _gameTimer?.cancel();
+        _mockOpponentActionTimer?.cancel();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '$_opponentNickname ended the game. Returning to lobby...',
+              style: const TextStyle(fontFamily: 'DynaPuff', color: Colors.white, fontSize: 14),
+            ),
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.redAccent,
+            margin: const EdgeInsets.only(bottom: 105, left: 40, right: 40),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(15),
+              side: const BorderSide(color: Colors.white24, width: 1),
+            ),
+          ),
+        );
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          if (mounted) Navigator.pop(context);
+        });
         break;
     }
   }
@@ -786,7 +861,11 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
 
           // Live Opponent Status Deck
           _buildOpponentProgressDeck(),
-          const SizedBox(height: 25),
+          const SizedBox(height: 20),
+
+          // Live Chat Box
+          _buildChatBox(),
+          const SizedBox(height: 20),
 
           // Control row
           _buildGameplayControls(),
@@ -1594,6 +1673,506 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
     );
   }
 
+  // --- CHAT ---
+  void _scrollChatToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_chatScrollController.hasClients) {
+        _chatScrollController.animateTo(
+          _chatScrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  void _sendChatMessage(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+
+    setState(() {
+      _chatMessages.add({
+        'text': trimmed,
+        'isMe': true,
+        'sender': _playerNickname,
+        'ts': DateTime.now().millisecondsSinceEpoch,
+      });
+    });
+    _chatController.clear();
+    _scrollChatToBottom();
+
+    FirebaseGameManager.instance.sendMessage({
+      'type': 'chat',
+      'text': trimmed,
+    });
+  }
+
+  Widget _buildChatBox() {
+    final myColor      = _colorFromPlayerString(widget.playerColor);
+    final myColorLight = _lightColorFromPlayerString(widget.playerColor);
+
+    // Opponent colour mirror
+    final opponentColorStr = widget.isCompeteMode
+        ? (widget.playerColor.toLowerCase() == 'blue' ? 'red' : 'blue')
+        : (widget.playerColor.toLowerCase() == 'blue' ? 'green' : 'blue');
+    final opponentColor      = _colorFromPlayerString(opponentColorStr);
+    final opponentColorLight = _lightColorFromPlayerString(opponentColorStr);
+
+    return Transform.rotate(
+      angle: -0.008,
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F9FF), // very light blue-white
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: AppColors.navyBlue, width: 2.5),
+          boxShadow: const [
+            BoxShadow(color: AppColors.navyBlue, offset: Offset(5, 5)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+
+            // ── Header ────────────────────────────────────────────────────
+            Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFEEF2FF),
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(19),
+                    topRight: Radius.circular(19),
+                  ),
+                  border: Border(
+                    bottom: BorderSide(color: AppColors.navyBlue, width: 2),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    // Icon badge
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDDE3FF),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.navyBlue, width: 1.5),
+                      ),
+                      child: const Icon(Icons.forum_rounded,
+                          size: 15, color: AppColors.navyBlue),
+                    ),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'CHAT CORNER',
+                      style: TextStyle(
+                        fontFamily: 'DynaPuff',
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.navyBlue,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // ── Message list ──────────────────────────────────────────
+            Container(
+              height: 175,
+              decoration: const BoxDecoration(
+                color: Color(0xFFF8F9FF),
+              ),
+                child: _chatMessages.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.chat_bubble_outline_rounded,
+                              size: 28,
+                              color: Colors.grey.shade300,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'No messages yet — say something!',
+                              style: TextStyle(
+                                fontFamily: 'Comfortaa',
+                                fontSize: 11,
+                                color: Colors.grey.shade400,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: _chatScrollController,
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                        itemCount: _chatMessages.length,
+                        itemBuilder: (context, i) {
+                          final msg    = _chatMessages[i];
+                          final isMe   = msg['isMe'] as bool;
+                          final bubble = msg['text'] as String;
+
+                          // Each bubble is a mini sticker card
+                          final bubbleColor =
+                              isMe ? myColor : opponentColor;
+                          final bubbleBg =
+                              isMe ? myColorLight : opponentColorLight;
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              mainAxisAlignment: isMe
+                                  ? MainAxisAlignment.end
+                                  : MainAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                // Avatar icon on the left for opponent
+                                if (!isMe) ...[
+                                  SizedBox(
+                                    width: 34,
+                                    height: 34,
+                                    child: Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        // Circle border ring
+                                        Container(
+                                          width: 30,
+                                          height: 30,
+                                          decoration: BoxDecoration(
+                                            color: opponentColorLight,
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                                color: opponentColor,
+                                                width: 1.5),
+                                          ),
+                                        ),
+                                        // Icon overlays on top of ring
+                                        Image.asset(
+                                          _opponentIconPath,
+                                          width: 34,
+                                          height: 34,
+                                          fit: BoxFit.contain,
+                                          filterQuality: FilterQuality.high,
+                                          errorBuilder: (_, _, _) => Icon(
+                                            Icons.person_rounded,
+                                            size: 20,
+                                            color: opponentColor,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                ],
+
+                                // Bubble
+                                Transform.rotate(
+                                  // Tiny alternating tilt — handwritten feel
+                                  angle: isMe
+                                      ? (i.isEven ? 0.008 : -0.006)
+                                      : (i.isEven ? -0.008 : 0.006),
+                                  child: Container(
+                                    constraints:
+                                        const BoxConstraints(maxWidth: 200),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: bubbleBg,
+                                      borderRadius: BorderRadius.only(
+                                        topLeft:
+                                            const Radius.circular(14),
+                                        topRight:
+                                            const Radius.circular(14),
+                                        bottomLeft:
+                                            Radius.circular(isMe ? 14 : 3),
+                                        bottomRight:
+                                            Radius.circular(isMe ? 3 : 14),
+                                      ),
+                                      border: Border.all(
+                                          color: bubbleColor, width: 1.5),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: bubbleColor
+                                              .withValues(alpha: 0.25),
+                                          offset: const Offset(2, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: isMe
+                                          ? CrossAxisAlignment.end
+                                          : CrossAxisAlignment.start,
+                                      children: [
+                                        // Sender name — DynaPuff mini label
+                                        Text(
+                                          isMe
+                                              ? _playerNickname
+                                              : _opponentNickname,
+                                          style: TextStyle(
+                                            fontFamily: 'DynaPuff',
+                                            fontSize: 8,
+                                            fontWeight: FontWeight.bold,
+                                            color: bubbleColor,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        // Message text
+                                        Text(
+                                          bubble,
+                                          style: TextStyle(
+                                            fontFamily: 'Comfortaa',
+                                            fontSize: 12,
+                                            color: AppColors.darkText,
+                                            height: 1.3,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+
+                                // Avatar icon on the right for me
+                                if (isMe) ...[
+                                  const SizedBox(width: 6),
+                                  SizedBox(
+                                    width: 34,
+                                    height: 34,
+                                    child: Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        // Circle border ring
+                                        Container(
+                                          width: 30,
+                                          height: 30,
+                                          decoration: BoxDecoration(
+                                            color: myColorLight,
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                                color: myColor,
+                                                width: 1.5),
+                                          ),
+                                        ),
+                                        // Icon overlays on top of ring
+                                        Image.asset(
+                                          _playerIconPath,
+                                          width: 34,
+                                          height: 34,
+                                          fit: BoxFit.contain,
+                                          filterQuality: FilterQuality.high,
+                                          errorBuilder: (_, _, _) => Icon(
+                                            Icons.person_rounded,
+                                            size: 20,
+                                            color: myColor,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+              ),
+
+              // ── Divider ────────────────────────────────────────────────
+              Container(
+                height: 1.5,
+                decoration: BoxDecoration(
+                  color: AppColors.navyBlue.withValues(alpha: 0.15),
+                ),
+              ),
+
+              // ── Quick-fire sticker chips ───────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header row with collapse toggle
+                    GestureDetector(
+                      onTap: () => setState(
+                          () => _quickFireExpanded = !_quickFireExpanded),
+                      child: Row(
+                        children: [
+                          const Text(
+                            'QUICK FIRE',
+                            style: TextStyle(
+                              fontFamily: 'DynaPuff',
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.secondaryText,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFDDE3FF),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                  color: AppColors.navyBlue, width: 1),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _quickFireExpanded ? 'HIDE' : 'SHOW',
+                                  style: const TextStyle(
+                                    fontFamily: 'DynaPuff',
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.navyBlue,
+                                  ),
+                                ),
+                                const SizedBox(width: 3),
+                                Icon(
+                                  _quickFireExpanded
+                                      ? Icons.keyboard_arrow_up_rounded
+                                      : Icons.keyboard_arrow_down_rounded,
+                                  size: 12,
+                                  color: AppColors.navyBlue,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    if (_quickFireExpanded) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: List.generate(_quickMessages.length, (i) {
+                          final chipColor =
+                              _chipColors[i % _chipColors.length];
+                          return GestureDetector(
+                            onTap: () => _sendChatMessage(_quickMessages[i]),
+                            child: Transform.rotate(
+                              angle: i.isEven ? 0.03 : -0.03,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 7),
+                                decoration: BoxDecoration(
+                                  color: chipColor,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                      color: AppColors.navyBlue, width: 1.5),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                        color: AppColors.navyBlue,
+                                        offset: Offset(2, 2)),
+                                  ],
+                                ),
+                                child: Text(
+                                  _quickMessages[i],
+                                  style: const TextStyle(
+                                    fontFamily: 'Comfortaa',
+                                    fontSize: 11,
+                                    color: AppColors.navyBlue,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              // ── Divider ────────────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Container(
+                  height: 1.5,
+                  color: AppColors.navyBlue.withValues(alpha: 0.15),
+                ),
+              ),
+
+              // ── Custom text input — notebook line style ─────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 14),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEEF2FF), // pale indigo tint
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: AppColors.navyBlue, width: 2),
+                          boxShadow: const [
+                            BoxShadow(
+                                color: AppColors.navyBlue,
+                                offset: Offset(2, 2)),
+                          ],
+                        ),
+                        child: TextField(
+                          controller: _chatController,
+                          style: const TextStyle(
+                            fontFamily: 'Comfortaa',
+                            fontSize: 12,
+                            color: AppColors.darkText,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Type a message...',
+                            hintStyle: TextStyle(
+                              fontFamily: 'Comfortaa',
+                              fontSize: 11,
+                              color: Colors.grey.shade400,
+                              fontStyle: FontStyle.italic,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 11),
+                            border: InputBorder.none,
+                          ),
+                          onSubmitted: _sendChatMessage,
+                          textInputAction: TextInputAction.send,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    // Send button — light periwinkle sticker style
+                    GestureDetector(
+                      onTap: () => _sendChatMessage(_chatController.text),
+                      child: Transform.rotate(
+                        angle: -0.05,
+                        child: Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDDE3FF), // light periwinkle
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.navyBlue, width: 2),
+                            boxShadow: const [
+                              BoxShadow(
+                                  color: AppColors.navyBlue,
+                                  offset: Offset(3, 3)),
+                            ],
+                          ),
+                          child: const Icon(Icons.send_rounded,
+                              color: AppColors.navyBlue, size: 20),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showExitConfirmation() {
     showDialog(
       context: context,
@@ -1617,9 +2196,11 @@ class _PeersPlayScreenState extends State<PeersPlayScreen> {
             child: const Text("CANCEL", style: TextStyle(fontFamily: 'DynaPuff', color: AppColors.navyBlue)),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context); // close dialog
-              Navigator.pop(this.context); // exit play screen
+              // Notify peer so they quit simultaneously
+              await FirebaseGameManager.instance.sendMessage({'type': 'quit_game'});
+              if (mounted) Navigator.pop(this.context); // exit play screen
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.redAccent,
