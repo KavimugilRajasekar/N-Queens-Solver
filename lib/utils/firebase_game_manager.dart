@@ -212,6 +212,38 @@ class FirebaseGameManager {
     return null;
   }
 
+  /// Fetch the latest profile for a peer — useful for refreshing cached nicknames.
+  Future<Map<String, dynamic>?> fetchPeerProfile(String peerId) =>
+      checkPeerValid(peerId);
+
+  /// Update this player's own nickname on the server + locally in SharedPreferences.
+  Future<bool> updatePlayerNickname(String newNickname) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final playerId = prefs.getString('player_unique_id_v2');
+      if (playerId == null) return false;
+
+      String id = playerId.trim();
+      if (!id.startsWith('NQ-')) id = 'NQ-$id';
+
+      final res = await http.patch(
+        Uri.parse('$_serverUrl/player/$id/nickname'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'playerId': id, 'nickname': newNickname}),
+      ).timeout(const Duration(seconds: 5));
+
+      if (res.statusCode == 200) {
+        await prefs.setString('player_nickname', newNickname);
+        debugPrint('Nickname updated to $newNickname.');
+        return true;
+      }
+      debugPrint('Nickname update failed: ${res.statusCode} ${res.body}');
+    } catch (e) {
+      debugPrint('updatePlayerNickname error: $e');
+    }
+    return false;
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // HOST: ask server to create room + send FCM invite
   // ─────────────────────────────────────────────────────────────────────────

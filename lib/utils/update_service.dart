@@ -214,11 +214,22 @@ class UpdateService {
                   angle: 0.01,
                   child: GestureDetector(
                     onTap: () async {
-                      Navigator.pop(dialogCtx);
                       final uri = Uri.parse(releaseUrl);
-                      if (await canLaunchUrl(uri)) {
-                        await launchUrl(uri,
-                            mode: LaunchMode.externalApplication);
+                      try {
+                        final launched = await launchUrl(
+                          uri,
+                          mode: LaunchMode.externalApplication,
+                        );
+                        if (launched && dialogCtx.mounted) {
+                          Navigator.pop(dialogCtx);
+                        }
+                      } catch (e) {
+                        debugPrint('UpdateService: launchUrl error — $e');
+                        // Fallback: try platform default mode
+                        try {
+                          await launchUrl(uri, mode: LaunchMode.platformDefault);
+                          if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+                        } catch (_) {}
                       }
                     },
                     child: Container(

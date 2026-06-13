@@ -26,6 +26,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
   
   // Selection states
   String? _selectedColor; // 'blue' or 'red'
+  bool _showRecentOpponents = false; // toggles the history panel
   
   // Per-match Board Configurations (up to 5 matches supported)
   final List<String> _boardSources = List.generate(5, (_) => 'auto');
@@ -460,12 +461,12 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                   _buildColorSelectorCard(),
                   const SizedBox(height: 25),
 
-                  // Card 3: Board Choice
-                  _buildBoardSelectorCard(),
+                  // Card 3: Match Count
+                  _buildMatchCountCard(),
                   const SizedBox(height: 25),
 
-                  // Card 4: Match Count
-                  _buildMatchCountCard(),
+                  // Card 4: Board Choice
+                  _buildBoardSelectorCard(),
                   const SizedBox(height: 40),
 
                   // Start Battle!
@@ -506,6 +507,39 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
     );
   }
 
+  /// Called when the history icon is tapped.
+  /// Expands the recent-opponents panel and silently refreshes nicknames in
+  /// the background by re-fetching each peer's latest profile from the server.
+  Future<void> _toggleRecentOpponents() async {
+    final nowShowing = !_showRecentOpponents;
+    setState(() => _showRecentOpponents = nowShowing);
+
+    if (!nowShowing || _recentOpponents.isEmpty) return;
+
+    // Silently refresh nicknames from server
+    bool anyChange = false;
+    final updated = List<Map<String, String>>.from(_recentOpponents);
+    for (int i = 0; i < updated.length; i++) {
+      final rawId = updated[i]['id'] ?? '';
+      try {
+        final profile = await FirebaseGameManager.instance.fetchPeerProfile(rawId);
+        if (profile != null) {
+          final fresh = profile['nickname'] as String? ?? updated[i]['nickname'] ?? 'Player';
+          if (fresh != updated[i]['nickname']) {
+            updated[i] = {...updated[i], 'nickname': fresh};
+            anyChange = true;
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (anyChange && mounted) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('recent_opponents', jsonEncode(updated));
+      setState(() => _recentOpponents = updated);
+    }
+  }
+
   Widget _buildOpponentInputCard() {
     return Transform.rotate(
       angle: 0.008,
@@ -522,54 +556,158 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Row(
+            // ── Header row ──────────────────────────────────────────────────
+            Row(
               children: [
-                Icon(Icons.person_search_rounded, color: AppColors.navyBlue, size: 20),
-                SizedBox(width: 8),
-                Text(
-                  'OPPONENT PLAYER ID',
-                  style: TextStyle(fontFamily: 'DynaPuff', fontSize: 13, color: AppColors.navyBlue, fontWeight: FontWeight.bold),
+                const Icon(Icons.person_search_rounded, color: AppColors.navyBlue, size: 20),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'OPPONENT PLAYER ID',
+                    style: TextStyle(fontFamily: 'DynaPuff', fontSize: 13, color: AppColors.navyBlue, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: _toggleRecentOpponents,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: _showRecentOpponents ? AppColors.navyBlue : Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: AppColors.navyBlue,
+                        width: _showRecentOpponents ? 0 : 1.5,
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.history_rounded,
+                      color: _showRecentOpponents ? Colors.white : AppColors.navyBlue,
+                      size: 20,
+                    ),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 10),
+
+            // ── Input field (always visible) ─────────────────────────────
             TextField(
               controller: _opponentIdController,
               keyboardType: TextInputType.number,
               maxLength: 6,
+              // Fixes emulator input — force software keyboard, no read-only quirks
+              enableInteractiveSelection: true,
+              showCursor: true,
               style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 2),
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 hintText: 'Enter 6-digit ID...',
                 counterText: "",
                 border: InputBorder.none,
-                hintStyle: const TextStyle(color: Colors.grey, fontWeight: FontWeight.normal, letterSpacing: 1),
+                hintStyle: TextStyle(color: Colors.grey, fontWeight: FontWeight.normal, letterSpacing: 1),
                 isDense: true,
-                suffixIcon: _recentOpponents.isEmpty ? null : PopupMenuButton<String>(
-                  icon: const Icon(Icons.history_rounded, color: AppColors.navyBlue),
-                  tooltip: 'Recent Opponents',
-                  onSelected: (String id) {
-                    setState(() {
-                      _opponentIdController.text = id;
-                    });
-                  },
-                  itemBuilder: (BuildContext context) {
-                    return _recentOpponents.map((opponent) {
-                      return PopupMenuItem<String>(
-                        value: opponent['id']!.replaceAll('NQ-', ''), // just digits
-                        child: Text('${opponent['nickname']} (${opponent['id']})', style: const TextStyle(fontFamily: 'Comfortaa')),
-                      );
-                    }).toList();
-                  },
-                ),
               ),
             ),
             const Divider(color: AppColors.paperLine, thickness: 2),
-            const SizedBox(height: 5),
-            Text(
-              widget.isCompeteMode 
-                ? "Type in your rival's game lobby key to link screens for mutual head-to-head compete dueling."
-                : "Type in your partner's game lobby key to link screens for simultaneous co-op solving.",
-              style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 11, color: AppColors.secondaryText),
+
+            // ── Hint text — hidden when history panel is open ────────────
+            AnimatedCrossFade(
+              duration: const Duration(milliseconds: 200),
+              crossFadeState: _showRecentOpponents
+                  ? CrossFadeState.showSecond
+                  : CrossFadeState.showFirst,
+              firstChild: Padding(
+                padding: const EdgeInsets.only(top: 5),
+                child: Text(
+                  widget.isCompeteMode
+                      ? "Type in your rival's game lobby key to link screens for mutual head-to-head compete dueling."
+                      : "Type in your partner's game lobby key to link screens for simultaneous co-op solving.",
+                  style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 11, color: AppColors.secondaryText),
+                ),
+              ),
+              secondChild: const SizedBox.shrink(),
+            ),
+
+            // ── Recent opponents panel — expands downward ────────────────
+            AnimatedSize(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+              child: _showRecentOpponents
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            const Icon(Icons.groups_rounded, color: AppColors.navyBlue, size: 16),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'RECENTLY CONNECTED',
+                              style: TextStyle(fontFamily: 'DynaPuff', fontSize: 10, color: AppColors.navyBlue),
+                            ),
+                            const Spacer(),
+                            // Refresh indicator — shows a tiny spinner while fetching
+                            const SizedBox(width: 16, height: 16),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ..._recentOpponents.map((opponent) {
+                          final rawId = (opponent['id'] ?? '').replaceAll('NQ-', '');
+                          final nickname = opponent['nickname'] ?? 'Player';
+                          final displayId = opponent['id'] ?? rawId;
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _opponentIdController.text = rawId;
+                                _showRecentOpponents = false;
+                              });
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF5F5FF),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppColors.navyBlue.withValues(alpha: 0.35), width: 1.5),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.person_rounded, color: AppColors.navyBlue, size: 18),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          nickname,
+                                          style: const TextStyle(
+                                            fontFamily: 'DynaPuff',
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppColors.darkText,
+                                          ),
+                                        ),
+                                        Text(
+                                          displayId,
+                                          style: const TextStyle(
+                                            fontFamily: 'Comfortaa',
+                                            fontSize: 10,
+                                            color: AppColors.secondaryText,
+                                            letterSpacing: 1,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.navyBlue, size: 14),
+                                ],
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+                    )
+                  : const SizedBox.shrink(),
             ),
           ],
         ),
