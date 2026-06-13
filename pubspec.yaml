@@ -1,5 +1,5 @@
 name: n_queens_solver
-description: "A new Flutter project."
+description: "A Flutter application that solves the N-Queens problem, allowing users to visualize and interact with the solutions. The app provides an intuitive interface for exploring different board sizes and configurations, making it an educational tool for understanding this classic algorithmic problem."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.0.2+3
 
 environment:
   sdk: ^3.11.5
@@ -49,7 +49,15 @@ dependencies:
   encrypt: ^5.0.3
   quick_actions: ^1.1.0
   shake: ^3.0.0
+  shared_preferences: ^2.5.2
+  device_info_plus: ^13.1.0
+  package_info_plus: ^10.1.0
+  firebase_core: ^4.9.0
+  firebase_messaging: ^16.2.2
+  firebase_database: ^12.4.1
+  url_launcher: ^6.3.0
 
+  http_parser: any
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -74,6 +82,7 @@ flutter:
     - assets/bg/
     - assets/icons/
     - assets/json/
+    - assets/player_icons/
 
   fonts:
     - family: Comfortaa

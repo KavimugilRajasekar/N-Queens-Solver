@@ -44,7 +44,7 @@ class BoardData {
 }
 
 class BoardProcessor {
-  static const String _apiUrl = 'https://image-processor-livid.vercel.app/process-image';
+  static const String _apiUrl = 'https://nqueensserver.vercel.app/process-image';
 
   static Color getRegionColor(int id, int n) {
     return RegionColors.getRegionColor(id, n);

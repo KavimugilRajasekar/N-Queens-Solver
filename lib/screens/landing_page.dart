@@ -4,11 +4,14 @@ import '../constants/colors.dart';
 import '../widgets/notebook_painter.dart';
 import '../utils/storage_manager.dart';
 import 'saved_boards_screen.dart';
-import 'camera_screen.dart';
 
 import 'package:lottie/lottie.dart';
 import '../utils/board_processor.dart';
 import '../utils/shortcut_manager.dart';
+import 'compete_mode_screen.dart';
+import '../utils/firebase_game_manager.dart';
+import '../utils/update_service.dart';
+import 'peers_play_screen.dart';
 
 class LandingPage extends StatefulWidget {
   final List<CameraDescription> cameras;
@@ -30,6 +33,198 @@ class _LandingPageState extends State<LandingPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AppShortcutManager.init(context, widget.cameras);
     });
+    
+    // Register invite listener
+    FirebaseGameManager.instance.incomingInviteNotifier.addListener(_handleIncomingInviteListener);
+    
+    // Process any pending invite loaded during startup/boot phase immediately
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (FirebaseGameManager.instance.incomingInviteNotifier.value != null) {
+        _handleIncomingInviteListener();
+      }
+      // Check GitHub for a newer release and notify the user if one exists
+      UpdateService.checkAndNotify(context);
+    });
+  }
+
+  @override
+  void dispose() {
+    FirebaseGameManager.instance.incomingInviteNotifier.removeListener(_handleIncomingInviteListener);
+    super.dispose();
+  }
+
+  void _handleIncomingInviteListener() {
+    final invite = FirebaseGameManager.instance.incomingInviteNotifier.value;
+    if (invite == null) return;
+    
+    // Reset the value so we don't trigger multiple popups
+    FirebaseGameManager.instance.incomingInviteNotifier.value = null;
+
+    if (!mounted) return;
+
+    final isCompete = invite['isCompeteMode'] == true;
+    final rivalName = invite['fromNickname'];
+    final matchCount = invite['matchCount'];
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(25),
+          side: const BorderSide(color: AppColors.navyBlue, width: 3),
+        ),
+        backgroundColor: isCompete ? const Color(0xFFFFEBEE) : const Color(0xFFE8F5E9),
+        title: Row(
+          children: [
+            Icon(
+              isCompete ? Icons.sports_esports_rounded : Icons.group_work_rounded,
+              color: isCompete ? Colors.redAccent.shade700 : Colors.green.shade700,
+              size: 28,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              isCompete ? "DUEL CHALLENGE!" : "CO-OP SYNC CHALLENGE!",
+              style: TextStyle(
+                fontFamily: 'DynaPuff',
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: isCompete ? Colors.redAccent.shade700 : Colors.green.shade700,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "INCOMING CHALLENGE",
+              style: TextStyle(fontFamily: 'DynaPuff', fontSize: 12, color: AppColors.navyBlue, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Player '$rivalName' has invited you to a ${isCompete ? 'Compete Duel' : 'Co-op Sync'} series ($matchCount ${matchCount == 1 ? 'Match' : 'Matches'}).\n\nDo you want to accept and connect?",
+              style: const TextStyle(fontFamily: 'Comfortaa', fontSize: 13, color: AppColors.darkText, height: 1.4),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogCtx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text(
+                    "Challenge declined!",
+                    style: TextStyle(fontFamily: 'DynaPuff', color: Colors.white, fontSize: 16),
+                  ),
+                  duration: const Duration(seconds: 1),
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: AppColors.navyBlue,
+                  margin: const EdgeInsets.only(bottom: 105, left: 40, right: 40),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                    side: const BorderSide(color: Colors.white24, width: 1),
+                  ),
+                ),
+              );
+            },
+            child: const Text("DECLINE", style: TextStyle(fontFamily: 'DynaPuff', color: Colors.redAccent)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(dialogCtx);
+
+              // Reconstruct boards
+              final boards = FirebaseGameManager.deserializeBoards(invite['matchBoards']);
+
+              // Show loading dialog
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (loadCtx) => const Center(
+                  child: Card(
+                    color: Colors.white,
+                    child: Padding(
+                      padding: EdgeInsets.all(20.0),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(color: AppColors.navyBlue),
+                          SizedBox(height: 15),
+                          Text("Connecting to Game Room...", style: TextStyle(fontFamily: 'DynaPuff', color: AppColors.navyBlue)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+
+              try {
+                // Initialize Joiner Connection
+                await FirebaseGameManager.instance.joinConnection(invite);
+                
+                if (mounted) {
+                  Navigator.pop(context); // Dismiss loading dialog
+
+                  // Derive joiner colour as the complement of what the host chose.
+                  // Co-op  : blue ↔ green
+                  // Compete: blue ↔ red
+                  final hostColor = invite['hostColor'] as String? ?? 'blue';
+                  String joinerColor;
+                  if (isCompete) {
+                    joinerColor = hostColor.toLowerCase() == 'blue' ? 'red' : 'blue';
+                  } else {
+                    joinerColor = hostColor.toLowerCase() == 'blue' ? 'green' : 'blue';
+                  }
+
+                  // Navigate to play screen
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => PeersPlayScreen(
+                        isCompeteMode: isCompete,
+                        opponentId: invite['fromPlayerId'],
+                        playerColor: joinerColor,
+                        matchCount: matchCount,
+                        matchBoards: boards,
+                      ),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  Navigator.pop(context); // Dismiss loading dialog
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        "Failed to connect to game room: $e",
+                        style: const TextStyle(fontFamily: 'DynaPuff', color: Colors.white, fontSize: 16),
+                      ),
+                      duration: const Duration(seconds: 1),
+                      behavior: SnackBarBehavior.floating,
+                      backgroundColor: AppColors.navyBlue,
+                      margin: const EdgeInsets.only(bottom: 105, left: 40, right: 40),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                        side: const BorderSide(color: Colors.white24, width: 1),
+                      ),
+                    ),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.navyBlue,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            ),
+            child: const Text("ACCEPT & PLAY", style: TextStyle(fontFamily: 'DynaPuff')),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadStats() async {
@@ -173,6 +368,8 @@ class _LandingPageState extends State<LandingPage> {
                     ),
                     const SizedBox(height: 80),
                     _buildMainActionButton(context),
+                    const SizedBox(height: 25),
+                    _buildCompeteModeButton(context),
                     const SizedBox(height: 60),
                   ],
                 ),
@@ -194,7 +391,7 @@ class _LandingPageState extends State<LandingPage> {
           borderRadius: BorderRadius.circular(25),
           border: Border.all(color: AppColors.gold, width: 3),
           boxShadow: [
-            BoxShadow(color: AppColors.gold.withOpacity(0.2), offset: const Offset(6, 6)),
+            BoxShadow(color: AppColors.gold.withValues(alpha: 0.2), offset: const Offset(6, 6)),
           ],
         ),
         child: Row(
@@ -231,7 +428,7 @@ class _LandingPageState extends State<LandingPage> {
               borderRadius: BorderRadius.circular(25),
               border: Border.all(color: AppColors.navyBlue, width: 3),
               boxShadow: [
-                BoxShadow(color: AppColors.navyBlue.withOpacity(0.3), offset: const Offset(10, 10)),
+                BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.3), offset: const Offset(10, 10)),
               ],
             ),
             child: ClipRRect(
@@ -290,7 +487,7 @@ class _LandingPageState extends State<LandingPage> {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: AppColors.navyBlue, width: 2),
           boxShadow: [
-            BoxShadow(color: AppColors.navyBlue.withOpacity(0.15), offset: const Offset(6, 6)),
+            BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.15), offset: const Offset(6, 6)),
           ],
         ),
         child: Row(
@@ -344,6 +541,52 @@ class _LandingPageState extends State<LandingPage> {
               Icon(Icons.rocket_launch_rounded, size: 30, color: AppColors.navyBlue),
               SizedBox(width: 15),
               Text('ENTER STUDIO', style: TextStyle(fontFamily: 'DynaPuff', fontWeight: FontWeight.bold, fontSize: 24, color: AppColors.navyBlue)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompeteModeButton(BuildContext context) {
+    return Transform.rotate(
+      angle: 0.03, // More pronounced tilt for extra funkiness
+      child: GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const CompeteModeScreen()),
+          );
+        },
+        child: Container(
+          width: double.infinity,
+          height: 75,
+          decoration: BoxDecoration(
+            color: const Color(0xFFFF4081), // Neon Pink "Funky" Sticker
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.navyBlue, width: 3),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.navyBlue,
+                offset: const Offset(10, 10), // Even deeper shadow
+              ),
+            ],
+          ),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.emoji_events_rounded, size: 30, color: Colors.white),
+              SizedBox(width: 15),
+              Text(
+                'COMPETE MODE',
+                style: TextStyle(
+                  fontFamily: 'DynaPuff',
+                  fontWeight: FontWeight.bold,
+                  fontSize: 24,
+                  color: Colors.white,
+                  letterSpacing: 1.2,
+                ),
+              ),
             ],
           ),
         ),

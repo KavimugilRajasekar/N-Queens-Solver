@@ -17,7 +17,7 @@ class VictoryDialog extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(30),
           border: Border.all(color: AppColors.navyBlue, width: 3),
-          boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(8, 8))],
+          boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.2), offset: const Offset(8, 8))],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -50,7 +50,7 @@ class VictoryDialog extends StatelessWidget {
                   color: AppColors.gold,
                   borderRadius: BorderRadius.circular(15),
                   border: Border.all(color: AppColors.navyBlue, width: 2),
-                  boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(4, 4))],
+                  boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.2), offset: const Offset(4, 4))],
                 ),
                 child: ElevatedButton(
                   onPressed: () {

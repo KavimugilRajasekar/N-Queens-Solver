@@ -59,7 +59,7 @@ class _GenerateBoardScreenState extends State<GenerateBoardScreen> {
         await FunkySuccessDialog.show(
           context, 
           title: 'Board Ready!', 
-          message: 'A brand new ${_size}x${_size} puzzle has been generated just for you!',
+          message: 'A brand new ${_size}x$_size puzzle has been generated just for you!',
         );
 
         if (mounted) {
@@ -134,7 +134,7 @@ class _GenerateBoardScreenState extends State<GenerateBoardScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(15),
           border: Border.all(color: AppColors.navyBlue, width: 2),
-          boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.15), offset: const Offset(4, 4))],
+          boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.15), offset: const Offset(4, 4))],
         ),
         child: TextField(
           controller: _nameController,
@@ -161,9 +161,9 @@ class _GenerateBoardScreenState extends State<GenerateBoardScreen> {
         SliderTheme(
           data: SliderThemeData(
             activeTrackColor: AppColors.gold,
-            inactiveTrackColor: AppColors.gold.withOpacity(0.2),
+            inactiveTrackColor: AppColors.gold.withValues(alpha: 0.2),
             thumbColor: AppColors.gold,
-            overlayColor: AppColors.gold.withOpacity(0.1),
+            overlayColor: AppColors.gold.withValues(alpha: 0.1),
             valueIndicatorTextStyle: const TextStyle(fontFamily: 'DynaPuff', color: AppColors.navyBlue),
           ),
           child: Slider(
@@ -202,7 +202,7 @@ class _GenerateBoardScreenState extends State<GenerateBoardScreen> {
               color: AppColors.gold,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: AppColors.navyBlue, width: 3),
-              boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.3), offset: const Offset(6, 6))],
+              boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.3), offset: const Offset(6, 6))],
             ),
             child: Center(
               child: Text(
@@ -228,7 +228,7 @@ class _GenerateBoardScreenState extends State<GenerateBoardScreen> {
             color: const Color(0xFFE3F2FD),
             borderRadius: BorderRadius.circular(15),
             border: Border.all(color: AppColors.navyBlue, width: 2.5),
-            boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.3), offset: const Offset(4, 4))],
+            boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.3), offset: const Offset(4, 4))],
           ),
           child: const Icon(Icons.arrow_back_rounded, color: AppColors.navyBlue, size: 28),
         ),

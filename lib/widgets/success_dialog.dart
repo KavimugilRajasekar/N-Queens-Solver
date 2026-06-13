@@ -22,7 +22,7 @@ class FunkySuccessDialog {
               borderRadius: BorderRadius.circular(25),
               border: Border.all(color: AppColors.navyBlue, width: 2.5),
               boxShadow: [
-                BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(8, 8)),
+                BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.2), offset: const Offset(8, 8)),
               ],
             ),
             child: Column(
@@ -48,9 +48,9 @@ class FunkySuccessDialog {
                     constraints: const BoxConstraints(maxHeight: 120),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.5),
+                      color: Colors.white.withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(15),
-                      border: Border.all(color: AppColors.navyBlue.withOpacity(0.1)),
+                      border: Border.all(color: AppColors.navyBlue.withValues(alpha: 0.1)),
                     ),
                     child: SingleChildScrollView(
                       child: Column(
@@ -81,7 +81,7 @@ class FunkySuccessDialog {
                         color: AppColors.gold,
                         borderRadius: BorderRadius.circular(15),
                         border: Border.all(color: AppColors.navyBlue, width: 2),
-                        boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.15), offset: const Offset(4, 4))],
+                        boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.15), offset: const Offset(4, 4))],
                       ),
                       child: const Center(
                         child: Text('Awesome!', style: TextStyle(fontFamily: 'DynaPuff', fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.navyBlue)),

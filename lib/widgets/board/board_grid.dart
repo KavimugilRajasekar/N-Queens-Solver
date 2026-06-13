@@ -41,7 +41,7 @@ class BoardGrid extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: isEditing ? AppColors.gold : AppColors.navyBlue, width: 3),
-          boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(8, 8))],
+          boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.2), offset: const Offset(8, 8))],
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
@@ -84,13 +84,13 @@ class BoardGrid extends StatelessWidget {
                     child: Container(
                       decoration: BoxDecoration(
                         color: RegionColors.getRegionColor(id, boardData.size),
-                        border: Border.all(color: Colors.black.withOpacity(0.05), width: 0.5)
+                        border: Border.all(color: Colors.black.withValues(alpha: 0.05), width: 0.5)
                       ),
                       child: Stack(
                         children: [
                           // Conflict Tints
                           if (isRowConflict || isColConflict)
-                            Container(color: Colors.red.withOpacity(0.1)),
+                            Container(color: Colors.red.withValues(alpha: 0.1)),
                           
                           if (isRegionConflict || isRowConflict || isColConflict || isQueenConflict || isNeighborhoodConflict)
                             Center(
@@ -111,7 +111,7 @@ class BoardGrid extends StatelessWidget {
                                 style: TextStyle(
                                   fontFamily: 'DynaPuff', 
                                   fontSize: (MediaQuery.of(context).size.width * boardScale * 0.3) / boardData.size, 
-                                  color: Colors.black.withOpacity(0.15), 
+                                  color: Colors.black.withValues(alpha: 0.15), 
                                   fontWeight: FontWeight.bold
                                 )
                               )
@@ -125,14 +125,14 @@ class BoardGrid extends StatelessWidget {
                               ),
                             ),
                           if (hasX)
-                            Center(child: Text('x', style: TextStyle(fontFamily: 'Comfortaa', fontSize: (MediaQuery.of(context).size.width * boardScale * 0.5) / boardData.size, color: AppColors.navyBlue.withOpacity(0.4), fontWeight: FontWeight.bold))),
+                            Center(child: Text('x', style: TextStyle(fontFamily: 'Comfortaa', fontSize: (MediaQuery.of(context).size.width * boardScale * 0.5) / boardData.size, color: AppColors.navyBlue.withValues(alpha: 0.4), fontWeight: FontWeight.bold))),
                           if (!hasQueen && !hasX && isInvalid)
                             Center(
                               child: Transform.rotate(
                                 angle: 0.1,
                                 child: Icon(
                                   Icons.close_rounded, 
-                                  color: AppColors.navyBlue.withOpacity(0.3), 
+                                  color: AppColors.navyBlue.withValues(alpha: 0.3), 
                                   size: (MediaQuery.of(context).size.width * boardScale * 0.6) / boardData.size
                                 ),
                               ),

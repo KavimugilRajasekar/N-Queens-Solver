@@ -3,12 +3,17 @@ import 'package:camera/camera.dart';
 import 'constants/colors.dart';
 import 'screens/landing_page.dart';
 
+import 'utils/firebase_game_manager.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
+  // Initialize Firebase and FCM
+  await FirebaseGameManager.instance.initializeFirebase();
+
   // Obtain a list of the available cameras on the device.
   final cameras = await availableCameras();
-  
+
   runApp(MyApp(cameras: cameras));
 }
 

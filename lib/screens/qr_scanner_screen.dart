@@ -217,7 +217,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(30),
             border: Border.all(color: AppColors.navyBlue, width: 4),
-            boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(8, 8))],
+            boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.2), offset: const Offset(8, 8))],
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(26),
@@ -330,7 +330,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
             borderRadius: BorderRadius.circular(15),
             border: Border.all(color: AppColors.navyBlue, width: 2),
             boxShadow: [
-              BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(4, 4))
+              BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.2), offset: const Offset(4, 4))
             ],
           ),
           child: Center(
@@ -356,7 +356,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
             color: const Color(0xFFE3F2FD),
             borderRadius: BorderRadius.circular(15),
             border: Border.all(color: AppColors.navyBlue, width: 2.5),
-            boxShadow: [BoxShadow(color: AppColors.navyBlue.withOpacity(0.3), offset: const Offset(4, 4))],
+            boxShadow: [BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.3), offset: const Offset(4, 4))],
           ),
           child: const Icon(Icons.arrow_back_rounded, color: AppColors.navyBlue, size: 28),
         ),

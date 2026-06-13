@@ -70,7 +70,7 @@ class _QRShareDialogState extends State<QRShareDialog> {
                 borderRadius: BorderRadius.circular(35),
                 border: Border.all(color: AppColors.navyBlue, width: 3),
                 boxShadow: [
-                  BoxShadow(color: AppColors.navyBlue.withOpacity(0.2), offset: const Offset(10, 10))
+                  BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.2), offset: const Offset(10, 10))
                 ],
               ),
               child: Column(
@@ -83,7 +83,7 @@ class _QRShareDialogState extends State<QRShareDialog> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: AppColors.gold.withOpacity(0.2),
+                          color: AppColors.gold.withValues(alpha: 0.2),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(Icons.qr_code_2_rounded, color: AppColors.navyBlue, size: 28),
@@ -102,7 +102,7 @@ class _QRShareDialogState extends State<QRShareDialog> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(25),
-                        border: Border.all(color: AppColors.navyBlue.withOpacity(0.15), width: 1.5),
+                        border: Border.all(color: AppColors.navyBlue.withValues(alpha: 0.15), width: 1.5),
                       ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -131,10 +131,10 @@ class _QRShareDialogState extends State<QRShareDialog> {
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
                                 color: Colors.white,
-                                border: Border.all(color: AppColors.navyBlue.withOpacity(0.1), width: 1.5),
+                                border: Border.all(color: AppColors.navyBlue.withValues(alpha: 0.1), width: 1.5),
                                 borderRadius: BorderRadius.circular(20),
                                 boxShadow: [
-                                  BoxShadow(color: AppColors.navyBlue.withOpacity(0.05), offset: const Offset(4, 4), blurRadius: 4)
+                                  BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.05), offset: const Offset(4, 4), blurRadius: 4)
                                 ],
                               ),
                               child: PrettyQrView.data(
@@ -193,7 +193,7 @@ class _QRShareDialogState extends State<QRShareDialog> {
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: AppColors.navyBlue, width: 2.5),
             boxShadow: [
-              BoxShadow(color: AppColors.navyBlue.withOpacity(0.3), offset: const Offset(4, 4))
+              BoxShadow(color: AppColors.navyBlue.withValues(alpha: 0.3), offset: const Offset(4, 4))
             ],
           ),
           child: Text(
