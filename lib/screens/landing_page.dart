@@ -12,6 +12,8 @@ import 'compete_mode_screen.dart';
 import '../utils/firebase_game_manager.dart';
 import '../utils/update_service.dart';
 import 'peers_play_screen.dart';
+import 'screenshot_solver_setup_screen.dart';
+import '../utils/screenshot_solver_service.dart';
 
 class LandingPage extends StatefulWidget {
   final List<CameraDescription> cameras;
@@ -22,16 +24,42 @@ class LandingPage extends StatefulWidget {
   State<LandingPage> createState() => _LandingPageState();
 }
 
-class _LandingPageState extends State<LandingPage> {
+class _LandingPageState extends State<LandingPage> with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   int _totalSolved = 0;
+  // NQ-Quick Scan live status
+  bool _qaAllSet = false;
+  final ScrollController _scrollController = ScrollController();
+  bool _showScrollDownButton = false;
+
+  AnimationController? _bounceController;
+  Animation<Offset>? _bobAnimation;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadStats();
+    _checkQuickAccessStatus();
+    _scrollController.addListener(_scrollListener);
+
+    // Initialize bounce controller for the floating arrow button
+    _bounceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    );
+    _bobAnimation = Tween<Offset>(
+      begin: Offset.zero,
+      end: const Offset(0, -8),
+    ).animate(CurvedAnimation(
+      parent: _bounceController!,
+      curve: Curves.easeInOut,
+    ));
+    _bounceController!.repeat(reverse: true);
+
     // Initialize Home Screen Shortcuts
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AppShortcutManager.init(context, widget.cameras);
+      _scrollListener();
     });
     
     // Register invite listener
@@ -49,8 +77,41 @@ class _LandingPageState extends State<LandingPage> {
 
   @override
   void dispose() {
+    _bounceController?.dispose();
+    _scrollController.removeListener(_scrollListener);
+    _scrollController.dispose();
+    WidgetsBinding.instance.removeObserver(this);
     FirebaseGameManager.instance.incomingInviteNotifier.removeListener(_handleIncomingInviteListener);
     super.dispose();
+  }
+
+  void _scrollListener() {
+    if (_scrollController.hasClients) {
+      final maxScroll = _scrollController.position.maxScrollExtent;
+      final currentScroll = _scrollController.offset;
+      final show = maxScroll > 100 && (maxScroll - currentScroll > 100);
+      if (show != _showScrollDownButton) {
+        setState(() {
+          _showScrollDownButton = show;
+        });
+      }
+    }
+  }
+
+  /// Re-check NQ-Quick Scan status when returning from the setup screen.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkQuickAccessStatus();
+    }
+  }
+
+  Future<void> _checkQuickAccessStatus() async {
+    final proj = await ScreenshotSolverService.instance.hasMediaProjectionPermission();
+    final overlay = await ScreenshotSolverService.instance.hasOverlayPermission();
+    if (mounted) {
+      setState(() => _qaAllSet = proj && overlay);
+    }
   }
 
   void _handleIncomingInviteListener() {
@@ -250,6 +311,7 @@ class _LandingPageState extends State<LandingPage> {
           Positioned.fill(child: CustomPaint(painter: NotebookPainter())),
           SafeArea(
             child: SingleChildScrollView(
+              controller: _scrollController,
               physics: const BouncingScrollPhysics(),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 40.0),
@@ -376,13 +438,75 @@ class _LandingPageState extends State<LandingPage> {
                     _buildMainActionButton(context),
                     const SizedBox(height: 25),
                     _buildCompeteModeButton(context),
+                    const SizedBox(height: 25),
+                    _buildQuickAccessButton(context),
                     const SizedBox(height: 60),
                   ],
                 ),
               ),
             ),
           ),
+          Positioned(
+            right: 20,
+            bottom: 20,
+            child: SafeArea(
+              child: _buildScrollDownButton(context),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildScrollDownButton(BuildContext context) {
+    final bobAnim = _bobAnimation;
+    if (bobAnim == null) return const SizedBox.shrink();
+
+    return AnimatedScale(
+      scale: _showScrollDownButton ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutBack,
+      child: AnimatedOpacity(
+        opacity: _showScrollDownButton ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 200),
+        child: AnimatedBuilder(
+          animation: bobAnim,
+          builder: (context, child) {
+            return Transform.translate(
+              offset: bobAnim.value,
+              child: child,
+            );
+          },
+          child: GestureDetector(
+            onTap: () {
+              _scrollController.animateTo(
+                _scrollController.position.maxScrollExtent,
+                duration: const Duration(milliseconds: 800),
+                curve: Curves.fastOutSlowIn,
+              );
+            },
+            child: Container(
+              width: 55,
+              height: 55,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.navyBlue, width: 3),
+                boxShadow: const [
+                  BoxShadow(
+                    color: AppColors.navyBlue,
+                    offset: Offset(4, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.arrow_downward_rounded,
+                color: AppColors.navyBlue,
+                size: 28,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -592,6 +716,74 @@ class _LandingPageState extends State<LandingPage> {
                   color: Colors.white,
                   letterSpacing: 1.2,
                 ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickAccessButton(BuildContext context) {
+    return Transform.rotate(
+      angle: -0.01,
+      child: GestureDetector(
+        onTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ScreenshotSolverSetupScreen(),
+            ),
+          );
+          // Refresh status when user returns from the setup screen
+          _checkQuickAccessStatus();
+        },
+        child: Container(
+          width: double.infinity,
+          height: 75,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1DE9B6), // Teal / mint accent
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.navyBlue, width: 3),
+            boxShadow: const [
+              BoxShadow(color: AppColors.navyBlue, offset: Offset(8, 8)),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                _qaAllSet
+                    ? Icons.check_circle_rounded
+                    : Icons.screenshot_monitor_rounded,
+                size: 30,
+                color: AppColors.navyBlue,
+              ),
+              const SizedBox(width: 15),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'NQ-QUICK SCAN',
+                    style: TextStyle(
+                      fontFamily: 'DynaPuff',
+                      fontWeight: FontWeight.bold,
+                      fontSize: 20,
+                      color: AppColors.navyBlue,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  Text(
+                    _qaAllSet ? 'All set! Tile is active ✓' : 'Tap to set up',
+                    style: TextStyle(
+                      fontFamily: 'Comfortaa',
+                      fontSize: 11,
+                      color: AppColors.navyBlue.withValues(alpha: 0.75),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
