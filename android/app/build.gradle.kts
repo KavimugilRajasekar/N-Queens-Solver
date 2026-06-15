@@ -25,7 +25,7 @@ android {
         applicationId = "com.example.n_queens_solver"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = 24  // MediaProjection + TileService requires API 24+
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -42,4 +42,11 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // OkHttp for screenshot upload from the native service layer
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // Kotlin coroutines for the service
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }

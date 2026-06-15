@@ -4,12 +4,16 @@ import 'constants/colors.dart';
 import 'screens/landing_page.dart';
 
 import 'utils/firebase_game_manager.dart';
+import 'utils/screenshot_solver_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize Firebase and FCM
   await FirebaseGameManager.instance.initializeFirebase();
+
+  // Initialize the screenshot solver event channel listener
+  ScreenshotSolverService.instance.initialize();
 
   // Obtain a list of the available cameras on the device.
   final cameras = await availableCameras();

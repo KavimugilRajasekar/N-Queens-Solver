@@ -12,6 +12,8 @@ import 'compete_mode_screen.dart';
 import '../utils/firebase_game_manager.dart';
 import '../utils/update_service.dart';
 import 'peers_play_screen.dart';
+import 'screenshot_solver_setup_screen.dart';
+import '../utils/screenshot_solver_service.dart';
 
 class LandingPage extends StatefulWidget {
   final List<CameraDescription> cameras;
@@ -22,13 +24,17 @@ class LandingPage extends StatefulWidget {
   State<LandingPage> createState() => _LandingPageState();
 }
 
-class _LandingPageState extends State<LandingPage> {
+class _LandingPageState extends State<LandingPage> with WidgetsBindingObserver {
   int _totalSolved = 0;
+  // Quick Access live status
+  bool _qaAllSet = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadStats();
+    _checkQuickAccessStatus();
     // Initialize Home Screen Shortcuts
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AppShortcutManager.init(context, widget.cameras);
@@ -49,8 +55,25 @@ class _LandingPageState extends State<LandingPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     FirebaseGameManager.instance.incomingInviteNotifier.removeListener(_handleIncomingInviteListener);
     super.dispose();
+  }
+
+  /// Re-check Quick Access status when returning from the setup screen.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkQuickAccessStatus();
+    }
+  }
+
+  Future<void> _checkQuickAccessStatus() async {
+    final proj = await ScreenshotSolverService.instance.hasMediaProjectionPermission();
+    final overlay = await ScreenshotSolverService.instance.hasOverlayPermission();
+    if (mounted) {
+      setState(() => _qaAllSet = proj && overlay);
+    }
   }
 
   void _handleIncomingInviteListener() {
@@ -376,6 +399,8 @@ class _LandingPageState extends State<LandingPage> {
                     _buildMainActionButton(context),
                     const SizedBox(height: 25),
                     _buildCompeteModeButton(context),
+                    const SizedBox(height: 25),
+                    _buildQuickAccessButton(context),
                     const SizedBox(height: 60),
                   ],
                 ),
@@ -592,6 +617,74 @@ class _LandingPageState extends State<LandingPage> {
                   color: Colors.white,
                   letterSpacing: 1.2,
                 ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickAccessButton(BuildContext context) {
+    return Transform.rotate(
+      angle: -0.01,
+      child: GestureDetector(
+        onTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ScreenshotSolverSetupScreen(),
+            ),
+          );
+          // Refresh status when user returns from the setup screen
+          _checkQuickAccessStatus();
+        },
+        child: Container(
+          width: double.infinity,
+          height: 75,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1DE9B6), // Teal / mint accent
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.navyBlue, width: 3),
+            boxShadow: const [
+              BoxShadow(color: AppColors.navyBlue, offset: Offset(8, 8)),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                _qaAllSet
+                    ? Icons.check_circle_rounded
+                    : Icons.screenshot_monitor_rounded,
+                size: 30,
+                color: AppColors.navyBlue,
+              ),
+              const SizedBox(width: 15),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'QUICK ACCESS',
+                    style: TextStyle(
+                      fontFamily: 'DynaPuff',
+                      fontWeight: FontWeight.bold,
+                      fontSize: 20,
+                      color: AppColors.navyBlue,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  Text(
+                    _qaAllSet ? 'All set! Tile is active ✓' : 'Tap to set up',
+                    style: TextStyle(
+                      fontFamily: 'Comfortaa',
+                      fontSize: 11,
+                      color: AppColors.navyBlue.withValues(alpha: 0.75),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

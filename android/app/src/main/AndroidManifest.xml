@@ -1,12 +1,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Existing permissions -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+    <!-- Quick Access Screenshot Solver permissions -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
 
     <application
         android:label="N-Queens Studio"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
+
+        <!-- ── Main Activity ──────────────────────────────────────────── -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -16,10 +25,6 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
-            <!-- Specifies an Android theme to apply to this Activity as soon as
-                 the Android process has started. This theme is visible to the user
-                 while the Flutter UI initializes. After that, this theme continues
-                 to determine the Window background behind the Flutter UI. -->
             <meta-data
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
@@ -28,35 +33,71 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-            <!-- Intent filter to receive FCM clicks in background/killed state -->
+            <!-- FCM click handler -->
             <intent-filter>
                 <action android:name="FLUTTER_NOTIFICATION_CLICK" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+            <!-- Tile service requests -->
+            <intent-filter>
+                <action android:name="com.example.n_queens_solver.REQUEST_PROJECTION"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.example.n_queens_solver.REQUEST_OVERLAY"/>
+            </intent-filter>
         </activity>
-        
-        <!-- Default Notification Channel ID metadata -->
+
+        <!-- ── Quick Settings Tile ────────────────────────────────────── -->
+        <service
+            android:name=".ScreenshotSolverTileService"
+            android:exported="true"
+            android:label="NQ Solver"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE"/>
+            </intent-filter>
+        </service>
+
+        <!-- ── Transparent trampoline: collapses the panel then fires the service -->
+        <activity
+            android:name=".CaptureTrampoline"
+            android:exported="false"
+            android:theme="@style/Theme.Transparent"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:launchMode="singleInstance"/>
+
+        <!-- ── Screenshot + Overlay Foreground Service ───────────────── -->
+        <service
+            android:name=".ScreenshotOverlayService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection"/>
+
+        <!-- ── Persistent MediaProjection session (avoids re-consent dialog) ── -->
+        <service
+            android:name=".ProjectionSessionService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection"/>
+
+        <!-- Default Notification Channel -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="high_importance_channel" />
 
-        <!-- Don't delete the meta-data below.
-             This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+        <!-- Flutter embedding v2 -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
     </application>
-    <!-- Required to query activities that can process text, see:
-         https://developer.android.com/training/package-visibility and
-         https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
- 
-         In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
+
+    <!-- Package visibility for url_launcher -->
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
-        <!-- Required for url_launcher to open https links in the browser -->
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />
@@ -66,4 +107,5 @@
             <data android:scheme="http" />
         </intent>
     </queries>
+
 </manifest>
