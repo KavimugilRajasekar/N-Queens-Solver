@@ -22,14 +22,14 @@ The puzzle variant used here is a **regional extension** of the classic problem:
 | 🔔 Auto Updates | Checks GitHub Releases on launch; notifies once per new version |
 | 👤 Player Identity | Hardware-derived 6-digit ID (`NQ-XXXXXX`) with custom nickname + icon |
 | 📋 Recent Opponents | History panel with player icon, name and ID — refreshed from server |
-| 📱 Quick Access Tile | QS tile captures screen, solves board, shows floating overlay — no dialog |
+| 📱 NQ-Quick Scan Tile | QS tile captures screen, solves board, shows floating overlay — no dialog |
 
 ---
 
 ## Screens
 
 ### Landing Page
-Home screen. Listens for incoming FCM game invites and shows the accept/decline dialog. Runs the GitHub update check silently in the background on every launch. Shows your mastery stats (boards manually solved). Three main action buttons: **Enter Studio**, **Compete Mode**, and **Quick Access**.
+Home screen. Listens for incoming FCM game invites and shows the accept/decline dialog. Runs the GitHub update check silently in the background on every launch. Shows your mastery stats (boards manually solved). Three main action buttons: **Enter Studio**, **Compete Mode**, and **NQ-Quick Scan**.
 
 ### Player Profile (`compete_mode_screen`)
 Set your nickname and pick one of ten preset player icons (crown, unicorn, dinosaur, alien, etc.). Your profile (nickname, icon, FCM token) is registered to the Vercel server and stored in Firebase RTDB under `players/NQ-XXXXXX`. Your 6-digit ID is displayed here — share it with friends to let them invite you.
@@ -49,16 +49,16 @@ The history panel silently refreshes opponent nicknames and icons from the serve
 ### Multiplayer Board (`peers_play_screen`)
 Live game screen for both co-op and compete modes. Boards, timer, activity log, real-time chat, and opponent status are all shown. Firebase RTDB handles real-time sync — no server hop for in-game moves.
 
-### Quick Access Setup (`screenshot_solver_setup_screen`)
+### NQ-Quick Scan Setup (`screenshot_solver_setup_screen`)
 One-time onboarding for the QS tile feature. Guides the user through granting two permissions:
 1. **Screen Capture (MediaProjection)** — required once; the live session is kept alive so the consent dialog never appears again on subsequent tile taps.
 2. **Display Over Other Apps (SYSTEM_ALERT_WINDOW)** — required to show the floating solved-board overlay above any application.
 
 ---
 
-## Quick Access Tile
+## NQ-Quick Scan Tile
 
-The "NQ Solver" tile lives in the Android Quick Settings panel (pull down notification shade → add tile). Tap it at any time while any app is open to instantly capture, process, and solve whatever N-Queens board is on screen.
+The "NQ-Quick Scan" tile lives in the Android Quick Settings panel (pull down notification shade → add tile). Tap it at any time while any app is open to instantly capture, process, and solve whatever N-Queens board is on screen.
 
 ### How it works
 
@@ -341,7 +341,7 @@ n_queens_server/
 ### Prerequisites
 
 - Flutter SDK ≥ 3.11
-- Android device or emulator (API 24+; Quick Access Tile requires API 26+)
+- Android device or emulator (API 24+; NQ-Quick Scan Tile requires API 26+)
 - A Firebase project with Realtime Database and Cloud Messaging enabled
 - `google-services.json` placed at `android/app/google-services.json`
 - The N-Queens server deployed to Vercel (see `../n_queens_server/`)
@@ -359,12 +359,12 @@ flutter run
 flutter build apk --release
 ```
 
-### Setting up the Quick Access Tile (on device)
+### Setting up the NQ-Quick Scan Tile (on device)
 
-1. Open the app → tap **QUICK ACCESS** on the home screen.
+1. Open the app → tap **NQ-QUICK SCAN** on the home screen.
 2. Grant **Screen Capture** — shown once; the live session persists.
 3. Grant **Display Over Other Apps** — allows the floating overlay.
-4. Pull down the notification shade, long-press any tile, and add **NQ Solver** to your Quick Settings panel.
+4. Pull down the notification shade, long-press any tile, and add **NQ-Quick Scan** to your Quick Settings panel.
 5. Open any app showing an N-Queens board and tap the tile — the solved board appears as a floating overlay within a few seconds.
 
 ---

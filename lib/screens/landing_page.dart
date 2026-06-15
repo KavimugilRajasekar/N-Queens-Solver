@@ -26,7 +26,7 @@ class LandingPage extends StatefulWidget {
 
 class _LandingPageState extends State<LandingPage> with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   int _totalSolved = 0;
-  // Quick Access live status
+  // NQ-Quick Scan live status
   bool _qaAllSet = false;
   final ScrollController _scrollController = ScrollController();
   bool _showScrollDownButton = false;
@@ -98,7 +98,7 @@ class _LandingPageState extends State<LandingPage> with WidgetsBindingObserver, 
     }
   }
 
-  /// Re-check Quick Access status when returning from the setup screen.
+  /// Re-check NQ-Quick Scan status when returning from the setup screen.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -765,7 +765,7 @@ class _LandingPageState extends State<LandingPage> with WidgetsBindingObserver, 
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'QUICK ACCESS',
+                    'NQ-QUICK SCAN',
                     style: TextStyle(
                       fontFamily: 'DynaPuff',
                       fontWeight: FontWeight.bold,

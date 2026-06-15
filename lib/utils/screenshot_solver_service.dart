@@ -91,6 +91,16 @@ class ScreenshotSolverService {
     }
   }
 
+  Future<bool> revokeMediaProjection() async {
+    try {
+      final result = await _methodChannel.invokeMethod<bool>('revokeMediaProjection');
+      return result ?? false;
+    } catch (e) {
+      debugPrint('ScreenshotSolverService: revokeMediaProjection error: $e');
+      return false;
+    }
+  }
+
   Future<void> requestOverlayPermission() async {
     try {
       await _methodChannel.invokeMethod('requestOverlayPermission');

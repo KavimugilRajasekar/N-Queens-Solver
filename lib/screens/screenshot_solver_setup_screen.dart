@@ -89,6 +89,31 @@ class _ScreenshotSolverSetupScreenState
     }
   }
 
+  Future<void> _revokeProjection() async {
+    final success = await ScreenshotSolverService.instance.revokeMediaProjection();
+    if (success) {
+      await _checkPermissions();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              "Screen Capture permission revoked!",
+              style: TextStyle(fontFamily: 'DynaPuff', color: Colors.white, fontSize: 16),
+            ),
+            duration: const Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: AppColors.navyBlue,
+            margin: const EdgeInsets.only(bottom: 105, left: 40, right: 40),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(15),
+              side: const BorderSide(color: Colors.white24, width: 1),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _grantOverlay() async {
     await ScreenshotSolverService.instance.requestOverlayPermission();
     // Re-check after returning from settings
@@ -138,7 +163,7 @@ class _ScreenshotSolverSetupScreenState
 
                   // Header
                   const Text(
-                    'QUICK ACCESS',
+                    'NQ-QUICK SCAN',
                     style: TextStyle(
                       fontFamily: 'DynaPuff',
                       fontSize: 12,
@@ -158,7 +183,7 @@ class _ScreenshotSolverSetupScreenState
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Add the "NQ Solver" tile to your Quick Settings panel, then tap it to instantly capture and solve any N-Queens board visible on your screen.',
+                    'Add the "NQ-Quick Scan" tile to your Quick Settings panel, then tap it to instantly capture and solve any N-Queens board visible on your screen.',
                     style: TextStyle(
                       fontFamily: 'Comfortaa',
                       fontSize: 13,
@@ -313,6 +338,7 @@ class _ScreenshotSolverSetupScreenState
                     isGranted: _hasProjection,
                     isLoading: _isCheckingProjection,
                     onGrant: _grantProjection,
+                    onRevoke: _revokeProjection,
                     rotation: 0.01,
                     isDisabled: !_hasOverlay,
                   ),
@@ -365,7 +391,7 @@ class _ScreenshotSolverSetupScreenState
                             ),
                             const SizedBox(height: 6),
                             const Text(
-                              'Pull down your notification shade and add the "NQ Solver" tile to Quick Settings. Tap it anytime to solve a board on your screen.',
+                              'Pull down your notification shade and add the "NQ-Quick Scan" tile to Quick Settings. Tap it anytime to solve a board on your screen.',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontFamily: 'Comfortaa',
@@ -418,7 +444,7 @@ class _ScreenshotSolverSetupScreenState
 
   static const _steps = [
     _Step('1', 'Pull down the notification shade and long-press a tile.'),
-    _Step('2', 'Add "NQ Solver" to your Quick Settings panel.'),
+    _Step('2', 'Add "NQ-Quick Scan" to your Quick Settings panel.'),
     _Step('3', 'Open any app that shows an N-Queens board.'),
     _Step('4', 'Tap the tile — the board is captured, solved and shown as a floating overlay automatically.'),
   ];
@@ -441,6 +467,7 @@ class _PermissionCard extends StatelessWidget {
   final bool isGranted;
   final bool isLoading;
   final VoidCallback onGrant;
+  final VoidCallback? onRevoke;
   final double rotation;
   final bool isDisabled;
 
@@ -451,6 +478,7 @@ class _PermissionCard extends StatelessWidget {
     required this.isGranted,
     required this.isLoading,
     required this.onGrant,
+    this.onRevoke,
     this.rotation = 0,
     this.isDisabled = false,
   });
@@ -565,6 +593,32 @@ class _PermissionCard extends StatelessWidget {
                                   color: isDisabled ? Colors.grey.shade500 : Colors.white,
                                 ),
                               ),
+                      ),
+                    ),
+                  ] else if (onRevoke != null) ...[
+                    const SizedBox(height: 10),
+                    GestureDetector(
+                      onTap: onRevoke,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.shade700,
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: const [
+                            BoxShadow(
+                                color: Colors.black26, offset: Offset(2, 2))
+                          ],
+                        ),
+                        child: const Text(
+                          'Revoke Permission',
+                          style: TextStyle(
+                            fontFamily: 'DynaPuff',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
                     ),
                   ],

@@ -81,6 +81,18 @@ class MainActivity : FlutterActivity() {
                     result.success(has)
                 }
 
+                "revokeMediaProjection" -> {
+                    val prefs = getSharedPreferences(ScreenshotSolverTileService.PREFS_NAME, Context.MODE_PRIVATE)
+                    prefs.edit()
+                        .remove(ScreenshotSolverTileService.KEY_PROJECTION_RESULT_CODE)
+                        .remove(ScreenshotSolverTileService.KEY_PROJECTION_DATA)
+                        .apply()
+                    
+                    val serviceIntent = Intent(this, ProjectionSessionService::class.java)
+                    stopService(serviceIntent)
+                    result.success(true)
+                }
+
                 "showSolvedOverlay" -> {
                     @Suppress("UNCHECKED_CAST")
                     val args = call.arguments as? Map<String, Any> ?: run {
