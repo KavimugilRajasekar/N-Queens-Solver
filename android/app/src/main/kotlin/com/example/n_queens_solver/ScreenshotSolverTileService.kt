@@ -7,22 +7,13 @@ import android.os.Build
 import android.provider.Settings
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
+import android.view.View
+import android.view.WindowManager
+import android.graphics.PixelFormat
 import androidx.annotation.RequiresApi
 
 /**
  * Quick Settings Tile that captures the screen and triggers the solver pipeline.
- *
- * Flow:
- *  1. User taps tile in notification shade.
- *  2a. If any permission is missing → launch MainActivity to request it.
- *  2b. All permissions granted → launch CaptureTrampoline via startActivityAndCollapse().
- *      startActivityAndCollapse() GUARANTEES the panel is dismissed before the
- *      Activity launches. CaptureTrampoline is fully transparent (invisible) and
- *      waits 500 ms for the dismiss animation to finish, then fires
- *      ACTION_CAPTURE on ProjectionSessionService and calls finish().
- *
- * Android 14+ (API 34): startActivityAndCollapse(Intent) is removed. Must use
- * startActivityAndCollapse(PendingIntent) instead to avoid crash + panel not closing.
  */
 @RequiresApi(Build.VERSION_CODES.N)
 class ScreenshotSolverTileService : TileService() {
@@ -41,20 +32,13 @@ class ScreenshotSolverTileService : TileService() {
         super.onClick()
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val hasProjectionPermission = prefs.getInt(KEY_PROJECTION_RESULT_CODE, -999) != -999
+        val isSessionAlive = ProjectionSessionService.isSessionAlive
+        val hasOverlay = canDrawOverlaysRobust(this)
 
-        if (!hasProjectionPermission) {
-            // Ask the main activity to request the MediaProjection permission.
+        if (!hasProjectionPermission || !isSessionAlive || !hasOverlay) {
+            // Open the app directly to the Quick Access screen
             val intent = Intent(this, MainActivity::class.java).apply {
-                action = ACTION_REQUEST_PROJECTION
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            }
-            collapseAndLaunch(intent)
-            return
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            val intent = Intent(this, MainActivity::class.java).apply {
-                action = ACTION_REQUEST_OVERLAY
+                action = ACTION_SHOW_QUICK_ACCESS
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
             }
             collapseAndLaunch(intent)
@@ -62,9 +46,6 @@ class ScreenshotSolverTileService : TileService() {
         }
 
         // All permissions granted — launch transparent CaptureTrampoline.
-        // Trampoline waits 500 ms for panel animation, then sends ACTION_CAPTURE
-        // to ProjectionSessionService (which holds the live MediaProjection).
-        // No consent dialog appears.
         val intent = Intent(this, CaptureTrampoline::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TASK or
@@ -73,19 +54,8 @@ class ScreenshotSolverTileService : TileService() {
         collapseAndLaunch(intent)
     }
 
-    /**
-     * Collapses the Quick Settings panel and launches [intent].
-     *
-     * On Android 14+ (API 34) the Intent overload of startActivityAndCollapse
-     * was removed and throws UnsupportedOperationException, causing the crash
-     * and the panel staying open. We must use the PendingIntent overload.
-     *
-     * On earlier APIs the Intent overload is still available, so we keep that
-     * path to avoid the extra PendingIntent overhead.
-     */
     private fun collapseAndLaunch(intent: Intent) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            // API 34+ — must use PendingIntent overload
             val pi = PendingIntent.getActivity(
                 this,
                 0,
@@ -101,15 +71,27 @@ class ScreenshotSolverTileService : TileService() {
 
     private fun updateTileState() {
         qsTile?.apply {
-            state = Tile.STATE_ACTIVE
-            label = "NQ Solver"
+            val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val hasProjectionPermission = prefs.getInt(KEY_PROJECTION_RESULT_CODE, -999) != -999
+            val isSessionAlive = ProjectionSessionService.isSessionAlive
+            val hasOverlay = canDrawOverlaysRobust(this@ScreenshotSolverTileService)
+
+            if (hasProjectionPermission && isSessionAlive && hasOverlay) {
+                state = Tile.STATE_ACTIVE
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    subtitle = "Tap to solve"
+                }
+            } else {
+                state = Tile.STATE_INACTIVE
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    subtitle = "Deactivated"
+                }
+            }
+            label = "NQ-Quick Scan"
             icon = android.graphics.drawable.Icon.createWithResource(
                 this@ScreenshotSolverTileService,
                 R.drawable.ic_qs_tile
             )
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                subtitle = "Tap to solve"
-            }
             updateTile()
         }
     }
@@ -119,6 +101,32 @@ class ScreenshotSolverTileService : TileService() {
         const val KEY_PROJECTION_RESULT_CODE = "projection_result_code"
         const val KEY_PROJECTION_DATA = "projection_data"
         const val ACTION_REQUEST_PROJECTION = "com.example.n_queens_solver.REQUEST_PROJECTION"
-        const val ACTION_REQUEST_OVERLAY = "com.example.n_queens_solver.REQUEST_OVERLAY"
+        const val ACTION_REQUEST_OVERLAY = "com.example.n_queens_solver.ACTION_REQUEST_OVERLAY"
+        const val ACTION_CLOSE_APP = "com.example.n_queens_solver.ACTION_CLOSE_APP"
+        const val ACTION_SHOW_QUICK_ACCESS = "com.example.n_queens_solver.ACTION_SHOW_QUICK_ACCESS"
+
+        fun canDrawOverlaysRobust(context: Context): Boolean {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
+            if (!Settings.canDrawOverlays(context)) return false
+            val wm = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return false
+            val view = View(context)
+            val params = WindowManager.LayoutParams(
+                0, 0,
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                else
+                    @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                PixelFormat.TRANSPARENT
+            )
+            return try {
+                wm.addView(view, params)
+                wm.removeView(view)
+                true
+            } catch (e: Exception) {
+                android.util.Log.e("OverlayCheck", "canDrawOverlays was true but addView failed: ${e.message}")
+                false
+            }
+        }
     }
 }

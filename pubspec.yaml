@@ -46,6 +46,7 @@ dependencies:
   share_plus: ^13.1.0
   screenshot: ^3.0.0
   permission_handler: ^11.1.0
+  image_picker: ^1.1.2
   encrypt: ^5.0.3
   quick_actions: ^1.1.0
   shake: ^3.0.0

@@ -5,6 +5,11 @@ import 'screens/landing_page.dart';
 
 import 'utils/firebase_game_manager.dart';
 import 'utils/screenshot_solver_service.dart';
+import 'utils/share_handler_service.dart';
+
+/// Global navigator key — lets [ShareHandlerService] push routes without a
+/// BuildContext (the shared image can arrive before any widget is on screen).
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,6 +19,9 @@ Future<void> main() async {
 
   // Initialize the screenshot solver event channel listener
   ScreenshotSolverService.instance.initialize();
+
+  // Initialize the share handler so images shared from other apps are caught
+  ShareHandlerService.instance.initialize(appNavigatorKey);
 
   // Obtain a list of the available cameras on the device.
   final cameras = await availableCameras();
@@ -31,6 +39,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'N-Queens Solver',
       debugShowCheckedModeBanner: false,
+      navigatorKey: appNavigatorKey,
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,

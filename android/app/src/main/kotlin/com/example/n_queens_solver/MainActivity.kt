@@ -14,16 +14,26 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
 
 class MainActivity : FlutterActivity() {
 
     // ── Channel names (must match Dart side) ─────────────────────────────────
     private val METHOD_CHANNEL  = "com.example.n_queens_solver/screenshot_solver"
     private val EVENT_CHANNEL   = "com.example.n_queens_solver/board_results"
+    private val SHARE_CHANNEL   = "com.example.n_queens_solver/share_handler"
 
     // ── Request codes ─────────────────────────────────────────────────────────
     private val REQ_MEDIA_PROJECTION = 1001
     private val REQ_OVERLAY_PERMISSION = 1002
+
+    // ── Shared image state ────────────────────────────────────────────────────
+    // Holds the path of an image shared into the app before Flutter is ready.
+    private var pendingSharedImagePath: String? = null
+    private var pendingAction: String? = null
+    private var screenshotSolverChannel: MethodChannel? = null
+    private var shareChannel: MethodChannel? = null
 
     // ── EventChannel sink (streams board results to Flutter) ─────────────────
     private var boardResultSink: EventChannel.EventSink? = null
@@ -44,10 +54,12 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
 
         // ── MethodChannel ────────────────────────────────────────────────────
-        MethodChannel(
+        val channel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             METHOD_CHANNEL
-        ).setMethodCallHandler { call, result ->
+        )
+        screenshotSolverChannel = channel
+        channel.setMethodCallHandler { call, result ->
             when (call.method) {
 
                 "requestMediaProjection" -> {
@@ -60,11 +72,7 @@ class MainActivity : FlutterActivity() {
                 }
 
                 "hasOverlayPermission" -> {
-                    result.success(
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-                            Settings.canDrawOverlays(this)
-                        else true
-                    )
+                    result.success(ScreenshotSolverTileService.canDrawOverlaysRobust(this))
                 }
 
                 "hasMediaProjectionPermission" -> {
@@ -115,6 +123,14 @@ class MainActivity : FlutterActivity() {
             }
         }
 
+        // If there was a pending action delivered before the channel was ready, push it now
+        pendingAction?.let { action ->
+            if (action == ScreenshotSolverTileService.ACTION_SHOW_QUICK_ACCESS) {
+                screenshotSolverChannel?.invokeMethod("showQuickAccess", null)
+            }
+            pendingAction = null
+        }
+
         // ── EventChannel ─────────────────────────────────────────────────────
         EventChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -127,6 +143,30 @@ class MainActivity : FlutterActivity() {
                 boardResultSink = null
             }
         })
+
+        // ── Share Handler Channel ─────────────────────────────────────────────
+        shareChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            SHARE_CHANNEL
+        ).also { ch ->
+            ch.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    // Flutter polls this once it's ready to see if there's a
+                    // pending shared image waiting to be processed.
+                    "getPendingSharedImage" -> {
+                        val path = pendingSharedImagePath
+                        pendingSharedImagePath = null
+                        result.success(path)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+            // If an image was shared before Flutter was ready, push it now.
+            pendingSharedImagePath?.let { path ->
+                pendingSharedImagePath = null
+                ch.invokeMethod("onSharedImage", path)
+            }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -163,15 +203,68 @@ class MainActivity : FlutterActivity() {
     // ─────────────────────────────────────────────────────────────────────────
 
     private var pendingProjectionResult: MethodChannel.Result? = null
+    private var isLaunchedFromTile = false
 
     private fun handleIncomingIntent(intent: Intent?) {
         when (intent?.action) {
+            ScreenshotSolverTileService.ACTION_CLOSE_APP -> {
+                finishAffinity()
+            }
+            ScreenshotSolverTileService.ACTION_SHOW_QUICK_ACCESS -> {
+                val ch = screenshotSolverChannel
+                if (ch != null) {
+                    ch.invokeMethod("showQuickAccess", null)
+                } else {
+                    pendingAction = ScreenshotSolverTileService.ACTION_SHOW_QUICK_ACCESS
+                }
+            }
             ScreenshotSolverTileService.ACTION_REQUEST_PROJECTION -> {
+                isLaunchedFromTile = true
                 requestMediaProjectionPermission(null)
             }
             ScreenshotSolverTileService.ACTION_REQUEST_OVERLAY -> {
                 requestOverlayPermission()
             }
+            Intent.ACTION_SEND -> {
+                // User shared an image from Photos / another app
+                val uri: Uri? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableExtra(Intent.EXTRA_STREAM)
+                }
+                if (uri != null) {
+                    val path = copyUriToTempFile(uri)
+                    if (path != null) {
+                        // If Flutter engine/channel is ready, push immediately;
+                        // otherwise store it so configureFlutterEngine picks it up.
+                        val ch = shareChannel
+                        if (ch != null) {
+                            ch.invokeMethod("onSharedImage", path)
+                        } else {
+                            pendingSharedImagePath = path
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Copies a content:// URI to a temp file in the app's cache dir and returns
+     * its absolute path, or null on failure.
+     */
+    private fun copyUriToTempFile(uri: Uri): String? {
+        return try {
+            val inputStream = contentResolver.openInputStream(uri) ?: return null
+            val ext = contentResolver.getType(uri)?.substringAfterLast('/') ?: "jpg"
+            val tempFile = File(cacheDir, "shared_image_${System.currentTimeMillis()}.$ext")
+            FileOutputStream(tempFile).use { out -> inputStream.copyTo(out) }
+            inputStream.close()
+            tempFile.absolutePath
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
 
@@ -263,6 +356,11 @@ class MainActivity : FlutterActivity() {
                     pendingProjectionResult?.success(false)
                 }
                 pendingProjectionResult = null
+
+                if (isLaunchedFromTile) {
+                    isLaunchedFromTile = false
+                    finish()
+                }
             }
 
             REQ_OVERLAY_PERMISSION -> {

@@ -346,11 +346,13 @@ class ScreenshotOverlayService : Service() {
 
         // Find the actual max region ID to avoid ArrayIndexOutOfBoundsException
         var maxRegion = size
-        for (row in regionIds) for (id in row) if (id > maxRegion) maxRegion = id
+        for (row in regionIds) {
+            for (id in row) {
+                if (id > maxRegion) maxRegion = id
+            }
+        }
 
         val usedCols    = BooleanArray(size)
-        val usedDiag1   = BooleanArray(2 * size - 1)  // row - col + size - 1
-        val usedDiag2   = BooleanArray(2 * size - 1)  // row + col
         val usedRegions = BooleanArray(maxRegion + 1)  // safe for any region ID
 
         fun bt(row: Int): Boolean {
@@ -358,19 +360,23 @@ class ScreenshotOverlayService : Service() {
             for (col in 0 until size) {
                 val region = regionIds[row][col]
                 if (region <= 0 || region > maxRegion) continue
-                val d1 = row - col + size - 1
-                val d2 = row + col
-                if (usedCols[col] || usedDiag1[d1] || usedDiag2[d2] || usedRegions[region]) continue
+                
+                // Adjacency check: cannot touch the queen in the previous row
+                if (row > 0) {
+                    val prevCol = solution[row - 1]
+                    if (Math.abs(col - prevCol) <= 1) continue
+                }
+
+                if (usedCols[col] || usedRegions[region]) continue
+                
                 solution[row] = col
                 usedCols[col] = true
-                usedDiag1[d1] = true
-                usedDiag2[d2] = true
                 usedRegions[region] = true
+                
                 if (bt(row + 1)) return true
+                
                 solution[row] = -1
                 usedCols[col] = false
-                usedDiag1[d1] = false
-                usedDiag2[d2] = false
                 usedRegions[region] = false
             }
             return false

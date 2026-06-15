@@ -56,11 +56,11 @@ class CaptureTrampoline : Activity() {
         val intent = Intent(this, ProjectionSessionService::class.java).apply {
             action = ProjectionSessionService.ACTION_CAPTURE
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
-        }
+        // Since ProjectionSessionService is already running as a foreground service,
+        // we can just call startService to deliver the ACTION_CAPTURE command.
+        // This avoids calling startForegroundService from the background, which
+        // can trigger Android 14+ background FGS start restrictions.
+        startService(intent)
     }
 
     companion object {

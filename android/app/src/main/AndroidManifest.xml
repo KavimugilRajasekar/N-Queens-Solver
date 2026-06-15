@@ -45,13 +45,19 @@
             <intent-filter>
                 <action android:name="com.example.n_queens_solver.REQUEST_OVERLAY"/>
             </intent-filter>
+            <!-- ── Share Target: receive images from other apps ──────────── -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
         </activity>
 
         <!-- ── Quick Settings Tile ────────────────────────────────────── -->
         <service
             android:name=".ScreenshotSolverTileService"
             android:exported="true"
-            android:label="NQ Solver"
+            android:label="NQ-Quick Scan"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE"/>
@@ -78,6 +84,7 @@
         <service
             android:name=".ProjectionSessionService"
             android:exported="false"
+            android:stopWithTask="false"
             android:foregroundServiceType="mediaProjection"/>
 
         <!-- Default Notification Channel -->

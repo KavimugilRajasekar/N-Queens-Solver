@@ -83,10 +83,11 @@ object OverlayWindow {
 
         // Card is 88% of screen width, square-ish
         val cardSize    = (screenW * 0.88f).toInt()
-        // Leave room for the header chip above the board
-        val headerH     = (52 * density).toInt()
+        val headerH     = (64 * density).toInt() // Increased to 64dp for title + status
         val padding     = (14 * density).toInt()
-        val totalH      = cardSize + headerH + (8 * density).toInt()
+        val shadowSize  = (8 * density).toInt()
+        val boardPx     = cardSize - shadowSize - padding * 2
+        val totalH      = headerH + boardPx + padding * 2 + shadowSize
 
         val root = OverlayRootView(appCtx, density, cardSize, totalH, headerH, padding,
                                    size, regionIds, solution, failReason)
@@ -126,9 +127,11 @@ object OverlayWindow {
                 }
                 MotionEvent.ACTION_UP -> {
                     if (!dragged) {
-                        // Check close button hit area: top-right 52×52dp
-                        val closeZone = 52 * density
-                        if (ev.x >= cardSize - closeZone && ev.y <= closeZone) {
+                        // Check close button hit area: top-right 44×44dp on the card (excluding shadow)
+                        val cW = cardSize - shadowSize
+                        val hitCloseX = ev.x >= cW - 44 * density
+                        val hitCloseY = ev.y <= 44 * density
+                        if (hitCloseX && hitCloseY) {
                             dismiss()
                         }
                     }
@@ -150,7 +153,8 @@ object OverlayWindow {
                 .setDuration(320)
                 .setInterpolator(OvershootInterpolator(1.6f))
                 .start()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            android.util.Log.e("OverlayWindow", "Failed to show overlay window: ${e.message}", e)
             isVisible = false
         }
     }
@@ -193,19 +197,13 @@ private class OverlayRootView(
 
     // Paints
     private val bgPaint   = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = OverlayWindow.COLOR_PAPER; strokeWidth = 1f * 1f   // 1px
-    }
-    private val marginPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(38, 255, 0, 0); strokeWidth = 1.5f
-    }
     private val cardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = OverlayWindow.COLOR_WHITE
     }
     private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = OverlayWindow.COLOR_NAVY
         style = Paint.Style.STROKE
-        strokeWidth = 3f * 1f
+        strokeWidth = 3f * dp
     }
     private val cellBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = OverlayWindow.COLOR_CELL_BORDER
@@ -222,7 +220,6 @@ private class OverlayRootView(
         color = OverlayWindow.COLOR_NAVY
         textAlign = Paint.Align.CENTER
     }
-    private val headerBgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val headerTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = OverlayWindow.COLOR_NAVY
         textAlign = Paint.Align.CENTER
@@ -244,96 +241,80 @@ private class OverlayRootView(
     override fun onMeasure(w: Int, h: Int) = setMeasuredDimension(cardW, totalH)
 
     override fun onDraw(canvas: Canvas) {
-        val cw = cardW.toFloat()
+        // Shadow is offset by 8dp to bottom-right
+        val shadowOffset = 8 * dp
+        val cW = cardW.toFloat() - shadowOffset
+        val cH = totalH.toFloat() - shadowOffset
 
-        // ── 1. Notebook paper background ─────────────────────────────────────
-        bgPaint.color = OverlayWindow.COLOR_BG
-        canvas.drawRect(0f, 0f, cw, totalH.toFloat(), bgPaint)
+        // Card rectangle (sharp corners)
+        val cardRect = RectF(0f, 0f, cW, cH)
+        // Shadow rectangle (sharp corners)
+        val shadowRect = RectF(shadowOffset, shadowOffset, cardW.toFloat(), totalH.toFloat())
 
-        var ly = 0f
-        while (ly < totalH) {
-            canvas.drawLine(0f, ly, cw, ly, linePaint)
-            ly += 30f
-        }
-        canvas.drawLine(60f, 0f, 60f, totalH.toFloat(), marginPaint)
+        // ── 1. Draw Card Drop Shadow ─────────────────────────────────────────
+        canvas.drawRect(shadowRect, shadowPaint)
 
-        // ── 2. Hard drop shadow on card (offset 8,8) ─────────────────────────
-        val cardTop   = headerH.toFloat() + 6 * dp
-        val cardR     = 20 * dp
-        val shadowR   = RectF(8 * dp, cardTop + 8 * dp, cw + 8 * dp, cardTop + cw + 8 * dp)
-        canvas.drawRoundRect(shadowR, cardR, cardR, shadowPaint)
+        // ── 2. Draw Card Background ──────────────────────────────────────────
+        canvas.drawRect(cardRect, cardPaint)
 
-        // ── 3. White card ─────────────────────────────────────────────────────
-        val cardR2 = RectF(0f, cardTop, cw, cardTop + cw)
-        canvas.drawRoundRect(cardR2, cardR, cardR, cardPaint)
+        // ── 3. Draw Card Border ──────────────────────────────────────────────
         borderPaint.strokeWidth = 3 * dp
-        canvas.drawRoundRect(cardR2, cardR, cardR, borderPaint)
+        canvas.drawRect(cardRect, borderPaint)
 
-        // ── 4. Header chip ("SOLVED ✓" or "NO SOLUTION") ─────────────────────
-        drawHeaderChip(canvas, cw, dp)
+        // ── 4. Draw Header separator line ────────────────────────────────────
+        borderPaint.strokeWidth = 1.5f * dp
+        canvas.drawLine(0f, headerH.toFloat(), cW, headerH.toFloat(), borderPaint)
 
-        // ── 5. Board grid OR failure explanation ──────────────────────────────
-        val boardOff = padding.toFloat()
-        val boardPx  = cw - boardOff * 2
-        if (failReason != null) {
-            drawFailPanel(canvas, boardOff, cardTop + boardOff, boardPx, failReason)
-        } else {
-            drawBoard(canvas, boardOff, cardTop + boardOff, boardPx)
-        }
-
-        // ── 6. Close button "×" ───────────────────────────────────────────────
-        drawCloseButton(canvas, cw, dp)
-    }
-
-    // ── Header chip ───────────────────────────────────────────────────────────
-
-    private fun drawHeaderChip(canvas: Canvas, cw: Float, dp: Float) {
-        val chipW  = 170 * dp
-        val chipH  = 40 * dp
-        val chipX  = (cw - chipW) / 2
-        val chipY  = 6 * dp
-        val chipR  = 12 * dp
+        // ── 5. Draw Header Title & Subtitle ──────────────────────────────────
+        val titleText = "N-Queens Studio"
+        headerTextPaint.textSize = 16 * dp
+        headerTextPaint.color = OverlayWindow.COLOR_NAVY
+        canvas.drawText(titleText, cW / 2, headerH * 0.46f, headerTextPaint)
 
         val isFail = failReason != null
-        val chipColor = if (isFail) Color.parseColor("#FF7043") else OverlayWindow.COLOR_GOLD
-        val chipText  = if (isFail) "NO SOLUTION  ✗" else "SOLVED  ✓"
+        val subText = if (isFail) "Unsolvable  ✗" else "Solvable  ✓"
+        val subColor = if (isFail) Color.parseColor("#E53935") else Color.parseColor("#4CAF50")
+        val subPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = subColor
+            textAlign = Paint.Align.CENTER
+            textSize = 12 * dp
+            isFakeBoldText = true
+        }
+        canvas.drawText(subText, cW / 2, headerH * 0.82f, subPaint)
 
-        // Shadow
-        val shadowRect = RectF(chipX + 4 * dp, chipY + 4 * dp, chipX + chipW + 4 * dp, chipY + chipH + 4 * dp)
-        canvas.drawRoundRect(shadowRect, chipR, chipR, shadowPaint)
+        // ── 6. Board grid OR failure explanation ──────────────────────────────
+        val boardOff = padding.toFloat()
+        val boardPx  = cW - boardOff * 2
+        val boardTop = headerH.toFloat() + boardOff
 
-        // Chip background
-        headerBgPaint.color = chipColor
-        val chipRect = RectF(chipX, chipY, chipX + chipW, chipY + chipH)
-        canvas.drawRoundRect(chipRect, chipR, chipR, headerBgPaint)
-        borderPaint.strokeWidth = 2 * dp
-        canvas.drawRoundRect(chipRect, chipR, chipR, borderPaint)
+        if (failReason != null) {
+            drawFailPanel(canvas, boardOff, boardTop, boardPx, failReason)
+        } else {
+            drawBoard(canvas, boardOff, boardTop, boardPx)
+        }
 
-        // Text
-        headerTextPaint.color = if (isFail) Color.WHITE else OverlayWindow.COLOR_NAVY
-        headerTextPaint.textSize = 14 * dp
-        canvas.drawText(chipText, chipX + chipW / 2, chipY + chipH * 0.67f, headerTextPaint)
+        // ── 7. Close button "×" (sharp cornered square) ──────────────────────
+        drawCloseButton(canvas, cW, dp)
     }
 
     // ── Failure explanation panel ─────────────────────────────────────────────
 
     private fun drawFailPanel(canvas: Canvas, ox: Float, oy: Float, panelPx: Float, reason: String) {
         val panelH = panelPx   // square, same as board area
-        val r      = 12 * dp
 
-        // Pale red background panel
+        // Pale red background panel (sharp)
         val panelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FFF3F0") }
         val panelRect  = RectF(ox, oy, ox + panelPx, oy + panelH)
-        canvas.drawRoundRect(panelRect, r, r, panelPaint)
+        canvas.drawRect(panelRect, panelPaint)
 
-        // Red dashed border
+        // Red dashed border (sharp)
         val borderP = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#FF7043")
             style = Paint.Style.STROKE
             strokeWidth = 2.5f * dp
             pathEffect = android.graphics.DashPathEffect(floatArrayOf(12f * dp, 6f * dp), 0f)
         }
-        canvas.drawRoundRect(panelRect, r, r, borderP)
+        canvas.drawRect(panelRect, borderP)
 
         // Big ✗ icon
         val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -390,17 +371,16 @@ private class OverlayRootView(
     private fun drawBoard(canvas: Canvas, ox: Float, oy: Float, boardPx: Float) {
         val cell = boardPx / size
 
-        // Board outer border (2dp navyBlue)
+        // Board outer border (2dp navyBlue, sharp cornered)
         borderPaint.strokeWidth = 2 * dp
         borderPaint.style = Paint.Style.STROKE
         val boardRect = RectF(ox, oy, ox + boardPx, oy + boardPx)
-        canvas.drawRoundRect(boardRect, 8 * dp, 8 * dp, cellFillPaint.apply { color = Color.WHITE; style = Paint.Style.FILL })
-        canvas.drawRoundRect(boardRect, 8 * dp, 8 * dp, borderPaint)
+        canvas.drawRect(boardRect, cellFillPaint.apply { color = Color.WHITE; style = Paint.Style.FILL })
+        canvas.drawRect(boardRect, borderPaint)
 
-        // Clip board
+        // Clip board (sharp cornered)
         canvas.save()
-        val clipPath = Path().apply { addRoundRect(boardRect, 8 * dp, 8 * dp, Path.Direction.CW) }
-        canvas.clipPath(clipPath)
+        canvas.clipRect(boardRect)
 
         // Draw cells
         for (r in 0 until size) {
@@ -409,7 +389,7 @@ private class OverlayRootView(
                 val t = oy + r * cell
                 val rect = RectF(l, t, l + cell, t + cell)
 
-                // Region fill
+                // Region fill (funky board colors inside!)
                 val id = safeId(r, c)
                 cellFillPaint.color = OverlayWindow.regionColor(id)
                 cellFillPaint.style = Paint.Style.FILL
@@ -438,7 +418,7 @@ private class OverlayRootView(
             }
         }
 
-        // Queen markers ★
+        // Queen markers ★ (funky!)
         queenPaint.textSize = cell * 0.75f
         for (r in 0 until size) {
             for (c in 0 until size) {
@@ -457,23 +437,27 @@ private class OverlayRootView(
 
     // ── Close button ──────────────────────────────────────────────────────────
 
-    private fun drawCloseButton(canvas: Canvas, cw: Float, dp: Float) {
-        val btnSize = 36 * dp
-        val margin  = 8 * dp
-        val bx = cw - btnSize - margin
-        val by = margin
+    private fun drawCloseButton(canvas: Canvas, cW: Float, dp: Float) {
+        val btnSize = 26 * dp
+        val offset  = 8 * dp
+        val bx = cW - btnSize - offset
+        val by = offset
 
-        // Circle bg (white + navy border)
-        val circPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
-        canvas.drawCircle(bx + btnSize / 2, by + btnSize / 2, btnSize / 2, circPaint)
+        // Square bg (white + navy border)
+        val rect = RectF(bx, by, bx + btnSize, by + btnSize)
+        val bgP = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+        canvas.drawRect(rect, bgP)
+
         val strokeP = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = OverlayWindow.COLOR_NAVY; style = Paint.Style.STROKE; strokeWidth = 2 * dp
+            color = OverlayWindow.COLOR_NAVY
+            style = Paint.Style.STROKE
+            strokeWidth = 2 * dp
         }
-        canvas.drawCircle(bx + btnSize / 2, by + btnSize / 2, btnSize / 2, strokeP)
+        canvas.drawRect(rect, strokeP)
 
         // × character
-        closePaint.textSize = 20 * dp
-        canvas.drawText("×", bx + btnSize / 2, by + btnSize * 0.70f, closePaint)
+        closePaint.textSize = 18 * dp
+        canvas.drawText("×", bx + btnSize / 2, by + btnSize * 0.73f, closePaint)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

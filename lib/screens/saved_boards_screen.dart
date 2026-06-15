@@ -11,6 +11,8 @@ import 'qr_scanner_screen.dart';
 import '../widgets/library/board_card.dart';
 import '../widgets/library/qr_share_dialog.dart';
 
+import 'n_queens_board.dart';
+import 'package:image_picker/image_picker.dart';
 import '../widgets/error_dialog.dart';
 import 'generate_board_screen.dart';
 import '../utils/qr_crypto.dart';
@@ -151,8 +153,8 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
                           angle: -0.05,
                           onTap: () async {
                             Navigator.pop(context);
-                            await Navigator.push(context, MaterialPageRoute(builder: (context) => CameraScreen(camera: widget.cameras.first)));
-                            _refreshBoards();
+                            // Use the State's own context, not the sheet's
+                            _showCameraOrUploadSheet();
                           },
                         ),
                       ],
@@ -188,6 +190,141 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
         ),
       ),
     );
+  }
+
+  void _showCameraOrUploadSheet() {
+    showModalBottomSheet(
+      context: context, // State's own context — always valid
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 30),
+            const Text(
+              'Select Source',
+              style: TextStyle(
+                fontFamily: 'DynaPuff',
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+                color: AppColors.navyBlue,
+              ),
+            ),
+            const SizedBox(height: 24),
+            _buildOptionCard(
+              icon: Icons.photo_camera_rounded,
+              title: 'Open Camera',
+              subtitle: 'Capture a board using your camera',
+              onTap: () async {
+                Navigator.pop(sheetCtx);
+                if (widget.cameras.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('No camera found on this device.')),
+                  );
+                  return;
+                }
+                await Navigator.push(
+                  context, // State's context
+                  MaterialPageRoute(builder: (_) => CameraScreen(camera: widget.cameras.first)),
+                );
+                _refreshBoards();
+              },
+            ),
+            const SizedBox(height: 16),
+            _buildOptionCard(
+              icon: Icons.photo_library_rounded,
+              title: 'Upload From Device',
+              subtitle: 'Choose a board photo from your gallery',
+              onTap: () async {
+                Navigator.pop(sheetCtx);
+                await Future.delayed(const Duration(milliseconds: 200)); // let sheet close
+                _pickAndProcessImage();
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndProcessImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile == null) return;
+
+    if (!mounted) return;
+
+    // Show loading dialog using State's context
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => Center(
+        child: Card(
+          color: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(25),
+            side: const BorderSide(color: AppColors.navyBlue, width: 3),
+          ),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: AppColors.navyBlue),
+                SizedBox(height: 20),
+                Text(
+                  "ANALYZING BOARD...",
+                  style: TextStyle(
+                    fontFamily: 'DynaPuff',
+                    color: AppColors.navyBlue,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      await BoardProcessor.cropImage(pickedFile.path);
+      final boardData = await BoardProcessor.processImage(pickedFile.path, 8);
+
+      if (mounted) {
+        Navigator.pop(context); // Dismiss loading dialog
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => NQueensBoardScreen(boardData: boardData)),
+        );
+        _refreshBoards();
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Dismiss loading dialog
+        
+        final errorStr = e.toString();
+        final isNetworkError = errorStr.contains('Network disconnected') ||
+                               errorStr.contains('SocketException') ||
+                               errorStr.contains('Connection failed');
+        
+        FunkyErrorDialog.show(
+          context,
+          title: isNetworkError ? 'No Network!' : 'Upload Failed!',
+          message: isNetworkError
+            ? 'Please connect to the internet. Our smart engine needs a quick handshake with the server to process your board!'
+            : 'Could not process the board image. Try again with a clearer picture of the board.',
+        );
+      }
+    }
   }
 
   Widget _buildMiniSubOption({required IconData icon, required String label, required VoidCallback onTap, double angle = 0.0}) {

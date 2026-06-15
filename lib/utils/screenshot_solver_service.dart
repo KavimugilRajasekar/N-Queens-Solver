@@ -6,6 +6,9 @@ import 'board_processor.dart';
 import 'solver_logic.dart';
 import 'storage_manager.dart';
 import '../constants/region_colors.dart';
+import '../main.dart';
+import '../screens/screenshot_solver_setup_screen.dart';
+import 'firebase_game_manager.dart';
 
 /// Flutter-side service that bridges the native screenshot-capture pipeline
 /// to the Dart solver (solver_logic.dart) and the native overlay.
@@ -40,9 +43,32 @@ class ScreenshotSolverService {
     if (_isInitialized) return;
     _isInitialized = true;
 
+    _methodChannel.setMethodCallHandler((call) async {
+      if (call.method == 'showQuickAccess') {
+        _navigateToQuickAccess();
+      }
+    });
+
     _boardResultSub = _eventChannel
         .receiveBroadcastStream()
         .listen(_onBoardResultReceived, onError: _onBoardResultError);
+  }
+
+  void _navigateToQuickAccess() {
+    final inPeerGame = FirebaseGameManager.instance.connectionState.value == 'connected';
+    if (inPeerGame) {
+      debugPrint('ScreenshotSolverService: showQuickAccess ignored because user is in peer match.');
+      return;
+    }
+
+    final navigator = appNavigatorKey.currentState;
+    if (navigator != null) {
+      navigator.push(
+        MaterialPageRoute(
+          builder: (_) => const ScreenshotSolverSetupScreen(),
+        ),
+      );
+    }
   }
 
   void dispose() {
@@ -209,6 +235,52 @@ class ScreenshotSolverService {
 
   Future<_SolveResult> _solveBoardAsync(BoardData board) async {
     try {
+      // 1. Verify that every cell on the board belongs to a valid region in [1..board.size]
+      final invalidCells = <String>[];
+      for (int r = 0; r < board.size; r++) {
+        for (int c = 0; c < board.size; c++) {
+          final id = board.regionIds[r][c];
+          if (id <= 0 || id > board.size) {
+            invalidCells.add('(${r + 1}, ${c + 1})');
+          }
+        }
+      }
+      if (invalidCells.isNotEmpty) {
+        return _SolveResult(
+          null,
+          'Some cells on the board have invalid or missing region assignments: '
+          '${invalidCells.take(5).join(', ')}${invalidCells.length > 5 ? '...' : ''}. '
+          'Every cell must belong to a valid region. Please capture the board again.',
+        );
+      }
+
+      // 2. Verify we have exactly N regions for an NxN board
+      if (board.regions.length != board.size) {
+        return _SolveResult(
+          null,
+          'The scanned board has an incorrect number of regions. '
+          'Found ${board.regions.length} region${board.regions.length == 1 ? '' : 's'} but expected ${board.size} '
+          'for a ${board.size}×${board.size} board. Please try capturing the board again.',
+        );
+      }
+
+      // 3. Verify that every region is a single connected component (no drifting/disconnected cells)
+      final disconnectedRegions = <int>[];
+      for (final region in board.regions.values) {
+        if (!_isRegionConnected(region)) {
+          disconnectedRegions.add(region.id);
+        }
+      }
+      if (disconnectedRegions.isNotEmpty) {
+        return _SolveResult(
+          null,
+          'Region${disconnectedRegions.length > 1 ? 's' : ''} '
+          '${disconnectedRegions.join(', ')} '
+          '${disconnectedRegions.length > 1 ? 'contain' : 'contains'} disconnected (drifting) cells. '
+          'Every region must be a single connected group of cells. Please capture the board again.',
+        );
+      }
+
       final solver = NQueensSolver(board);
 
       // Detect which regions have zero cells (empty domain = impossible)
@@ -251,6 +323,38 @@ class ScreenshotSolverService {
         'Solver crashed unexpectedly: ${msg.length > 100 ? msg.substring(0, 100) : msg}',
       );
     }
+  }
+
+  bool _isRegionConnected(BoardRegion region) {
+    if (region.coordinates.isEmpty) return true;
+
+    final coordsSet = region.coordinates.map((pt) => '${pt.x},${pt.y}').toSet();
+    final visited = <String>{};
+
+    final queue = <Point>[region.coordinates.first];
+    visited.add('${queue.first.x},${queue.first.y}');
+
+    int head = 0;
+    while (head < queue.length) {
+      final current = queue[head++];
+
+      final neighbors = [
+        Point(current.x + 1, current.y),
+        Point(current.x - 1, current.y),
+        Point(current.x, current.y + 1),
+        Point(current.x, current.y - 1),
+      ];
+
+      for (final neighbor in neighbors) {
+        final key = '${neighbor.x},${neighbor.y}';
+        if (coordsSet.contains(key) && !visited.contains(key)) {
+          visited.add(key);
+          queue.add(neighbor);
+        }
+      }
+    }
+
+    return visited.length == region.coordinates.length;
   }
 
   /// Produce a concise, user-friendly explanation of why the board has no solution.

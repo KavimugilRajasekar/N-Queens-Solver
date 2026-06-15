@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../constants/colors.dart';
@@ -24,16 +25,22 @@ class _ScreenshotSolverSetupScreenState
   bool _isCheckingProjection = false;
   // True when the pref flag exists but the ProjectionSessionService is dead
   bool _sessionExpired = false;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _checkPermissions();
+    // Auto-refresh every second so status updates live
+    _refreshTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _checkPermissions();
+    });
   }
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -307,6 +314,7 @@ class _ScreenshotSolverSetupScreenState
                     isLoading: _isCheckingProjection,
                     onGrant: _grantProjection,
                     rotation: 0.01,
+                    isDisabled: !_hasOverlay,
                   ),
                   const SizedBox(height: 16),
 
@@ -434,6 +442,7 @@ class _PermissionCard extends StatelessWidget {
   final bool isLoading;
   final VoidCallback onGrant;
   final double rotation;
+  final bool isDisabled;
 
   const _PermissionCard({
     required this.icon,
@@ -443,6 +452,7 @@ class _PermissionCard extends StatelessWidget {
     required this.isLoading,
     required this.onGrant,
     this.rotation = 0,
+    this.isDisabled = false,
   });
 
   @override
@@ -452,10 +462,14 @@ class _PermissionCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: isGranted ? const Color(0xFFF1F8E9) : Colors.white,
+          color: isDisabled
+              ? Colors.grey.shade50
+              : (isGranted ? const Color(0xFFF1F8E9) : Colors.white),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: isGranted ? Colors.green : AppColors.navyBlue.withValues(alpha: 0.4),
+            color: isDisabled
+                ? Colors.grey.shade300
+                : (isGranted ? Colors.green : AppColors.navyBlue.withValues(alpha: 0.4)),
             width: isGranted ? 2.5 : 1.5,
           ),
           boxShadow: [
@@ -471,18 +485,24 @@ class _PermissionCard extends StatelessWidget {
               width: 50,
               height: 50,
               decoration: BoxDecoration(
-                color: isGranted
-                    ? Colors.green.withValues(alpha: 0.15)
-                    : AppColors.gold.withValues(alpha: 0.15),
+                color: isDisabled
+                    ? Colors.grey.shade200
+                    : (isGranted
+                        ? Colors.green.withValues(alpha: 0.15)
+                        : AppColors.gold.withValues(alpha: 0.15)),
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: isGranted ? Colors.green : AppColors.navyBlue,
+                  color: isDisabled
+                      ? Colors.grey.shade400
+                      : (isGranted ? Colors.green : AppColors.navyBlue),
                   width: 2,
                 ),
               ),
               child: Icon(
                 isGranted ? Icons.check_rounded : icon,
-                color: isGranted ? Colors.green : AppColors.navyBlue,
+                color: isDisabled
+                    ? Colors.grey.shade500
+                    : (isGranted ? Colors.green : AppColors.navyBlue),
                 size: 26,
               ),
             ),
@@ -493,37 +513,39 @@ class _PermissionCard extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'DynaPuff',
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.navyBlue,
+                      color: isDisabled ? Colors.grey.shade500 : AppColors.navyBlue,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     description,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'Comfortaa',
                       fontSize: 11,
-                      color: AppColors.secondaryText,
+                      color: isDisabled ? Colors.grey.shade400 : AppColors.secondaryText,
                       height: 1.4,
                     ),
                   ),
                   if (!isGranted) ...[
                     const SizedBox(height: 10),
                     GestureDetector(
-                      onTap: isLoading ? null : onGrant,
+                      onTap: (isLoading || isDisabled) ? null : onGrant,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 8),
                         decoration: BoxDecoration(
-                          color: AppColors.navyBlue,
+                          color: isDisabled ? Colors.grey.shade300 : AppColors.navyBlue,
                           borderRadius: BorderRadius.circular(10),
-                          boxShadow: const [
-                            BoxShadow(
-                                color: Colors.black26, offset: Offset(2, 2))
-                          ],
+                          boxShadow: isDisabled
+                              ? null
+                              : const [
+                                  BoxShadow(
+                                      color: Colors.black26, offset: Offset(2, 2))
+                                ],
                         ),
                         child: isLoading
                             ? const SizedBox(
@@ -534,13 +556,13 @@ class _PermissionCard extends StatelessWidget {
                                   strokeWidth: 2,
                                 ),
                               )
-                            : const Text(
+                            : Text(
                                 'Grant Permission',
                                 style: TextStyle(
                                   fontFamily: 'DynaPuff',
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.white,
+                                  color: isDisabled ? Colors.grey.shade500 : Colors.white,
                                 ),
                               ),
                       ),

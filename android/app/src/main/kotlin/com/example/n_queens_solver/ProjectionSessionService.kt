@@ -9,6 +9,7 @@ import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.*
+import android.service.quicksettings.TileService
 import android.util.DisplayMetrics
 import android.view.*
 import android.widget.Toast
@@ -62,6 +63,9 @@ class ProjectionSessionService : Service() {
         private const val CHANNEL_ID = "nq_session_channel"
         private const val NOTIF_ID   = 1002
 
+        // Traces if a valid MediaProjection session is currently running
+        @Volatile var isSessionAlive = false
+
         // Held statically so MainActivity can dismiss it on the main thread
         // when Flutter calls back with a solve result.
         @Volatile private var loadingViewStatic: android.widget.TextView? = null
@@ -101,51 +105,65 @@ class ProjectionSessionService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Always promote to foreground immediately (Android ANR rules)
-        startForeground(NOTIF_ID, buildNotification("NQ Solver ready"))
+        val action = intent?.action
 
-        when (intent?.action) {
+        if (action == null) {
+            // First-time start: promote to foreground using mediaProjection type (required on Android 14+)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIF_ID,
+                    buildNotification("NQ Solver ready"),
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                )
+            } else {
+                startForeground(NOTIF_ID, buildNotification("NQ Solver ready"))
+            }
 
-            // ── Stop request ───────────────────────────────────────────────────
-            ACTION_STOP -> {
+            val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
+                ?: Activity.RESULT_CANCELED
+            val projectionData = intent?.getParcelableExtra<Intent>(EXTRA_PROJECTION_DATA)
+
+            if (resultCode != Activity.RESULT_OK || projectionData == null) {
+                isSessionAlive = false
+                updateTileStateQuietly()
                 stopSelf()
                 return START_NOT_STICKY
             }
-
-            // ── First-time start (no action): build MediaProjection from fresh token ──
-            null -> {
-                val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
-                    ?: Activity.RESULT_CANCELED
-                val projectionData = intent?.getParcelableExtra<Intent>(EXTRA_PROJECTION_DATA)
-
-                if (resultCode != Activity.RESULT_OK || projectionData == null) {
-                    stopSelf()
-                    return START_NOT_STICKY
-                }
-                initProjection(resultCode, projectionData)
-            }
-
-            // ── Tile was tapped: take a screenshot now ────────────────────────
-            ACTION_CAPTURE -> {
-                if (mediaProjection == null) {
-                    // Session died (e.g. phone restarted) — clear stale prefs and
-                    // ask the user to re-grant from the app.
-                    clearProjectionPrefs()
-                    showToast("Session expired. Open N-Queens app to re-authorize.")
+            initProjection(resultCode, projectionData)
+        } else {
+            when (action) {
+                // ── Stop request ───────────────────────────────────────────────────
+                ACTION_STOP -> {
+                    isSessionAlive = false
+                    updateTileStateQuietly()
                     stopSelf()
                     return START_NOT_STICKY
                 }
 
-                if (isCaptureInProgress) {
-                    showToast("Already capturing, please wait…")
-                    return START_NOT_STICKY
-                }
+                // ── Tile was tapped: take a screenshot now ────────────────────────
+                ACTION_CAPTURE -> {
+                    if (mediaProjection == null) {
+                        // Session died (e.g. phone restarted) — clear stale prefs and
+                        // ask the user to re-grant from the app.
+                        isSessionAlive = false
+                        clearProjectionPrefs()
+                        updateTileStateQuietly()
+                        showToast("Session expired. Open N-Queens app to re-authorize.")
+                        stopSelf()
+                        return START_NOT_STICKY
+                    }
 
-                // Dismiss any previously visible overlay before taking a new shot
-                if (OverlayWindow.isVisible) {
-                    mainHandler.post { OverlayWindow.dismiss() }
+                    if (isCaptureInProgress) {
+                        showToast("Already capturing, please wait…")
+                        return START_NOT_STICKY
+                    }
+
+                    // Dismiss any previously visible overlay before taking a new shot
+                    if (OverlayWindow.isVisible) {
+                        mainHandler.post { OverlayWindow.dismiss() }
+                    }
+                    performCapture()
                 }
-                performCapture()
             }
         }
 
@@ -161,7 +179,20 @@ class ProjectionSessionService : Service() {
         releaseCapture()
         mediaProjection?.stop()
         mediaProjection = null
+        isSessionAlive = false
+        updateTileStateQuietly()
         super.onDestroy()
+    }
+
+    private fun updateTileStateQuietly() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            try {
+                TileService.requestListeningState(
+                    applicationContext,
+                    ComponentName(applicationContext, ScreenshotSolverTileService::class.java)
+                )
+            } catch (_: Exception) {}
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -179,16 +210,22 @@ class ProjectionSessionService : Service() {
         val projection = try {
             mgr.getMediaProjection(resultCode, data)
         } catch (e: Exception) {
+            isSessionAlive = false
             clearProjectionPrefs()
+            updateTileStateQuietly()
             stopSelf()
             return
         }
         if (projection == null) {
+            isSessionAlive = false
             clearProjectionPrefs()
+            updateTileStateQuietly()
             stopSelf()
             return
         }
         mediaProjection = projection
+        isSessionAlive = true
+        updateTileStateQuietly()
 
         // Android 14+: must register callback before creating a VirtualDisplay
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -199,6 +236,8 @@ class ProjectionSessionService : Service() {
                         clearProjectionPrefs()
                         releaseCapture()
                         mediaProjection = null
+                        isSessionAlive = false
+                        updateTileStateQuietly()
                         stopSelf()
                     }
                 }
@@ -295,6 +334,13 @@ class ProjectionSessionService : Service() {
 
         releaseCapture()
 
+        // Terminate the MediaProjection session immediately since the token has been used
+        mediaProjection?.stop()
+        mediaProjection = null
+        isSessionAlive = false
+        clearProjectionPrefs()
+        updateTileStateQuietly()
+
         mainHandler.post { showLoadingOverlay() }
         scope.launch { uploadAndProcess(bitmap) }
     }
@@ -347,6 +393,7 @@ class ProjectionSessionService : Service() {
                     dismissLoadingOverlay()
                     finishCapturePipeline()
                     showToast("Server error (${response.code}). Could not process screenshot.")
+                    stopSelf()
                 }
                 return
             }
@@ -357,32 +404,174 @@ class ProjectionSessionService : Service() {
                     dismissLoadingOverlay()
                     finishCapturePipeline()
                     showToast("No N-Queens board detected in screenshot.")
+                    stopSelf()
                 }
                 return
             }
 
-            // ── Broadcast parsed board to Flutter — Flutter runs solver_logic.dart
-            //    and calls back showSolvedOverlay (with solution or failReason).
-            //    The loading overlay stays visible until Flutter responds.
-            mainHandler.post {
-                finishCapturePipeline()
-                broadcastBoardResult(boardJson)
-                // Loading overlay is dismissed by the showSolvedOverlay call from Flutter,
-                // or after a 30s timeout guard below.
+            // ── Solve the board natively (works even when Flutter is dead) ──
+            val size = boardJson.getInt("size")
+            val regionIdsJson = boardJson.getJSONArray("regionIds")
+            val regionIds = List(size) { r ->
+                List(size) { c -> regionIdsJson.getJSONArray(r).getInt(c) }
             }
 
-            // 30-second timeout: if Flutter never responds (app killed), dismiss loading
-            mainHandler.postDelayed({
+            // --- VALIDATION STARTS ---
+            var failReason: String? = null
+
+            // 1. Verify region count matches size
+            val uniqueRegions = mutableSetOf<Int>()
+            for (row in regionIds) {
+                for (id in row) {
+                    uniqueRegions.add(id)
+                }
+            }
+            if (uniqueRegions.size != size) {
+                failReason = "Expected $size regions for a ${size}x${size} board, but found ${uniqueRegions.size}. Please capture again."
+            }
+
+            // 2. Verify all regions are connected (no drifting cells)
+            if (failReason == null) {
+                val disconnected = mutableListOf<Int>()
+                for (id in uniqueRegions) {
+                    if (!isRegionConnected(size, regionIds, id)) {
+                        disconnected.add(id)
+                    }
+                }
+                if (disconnected.isNotEmpty()) {
+                    failReason = "Region${if (disconnected.size > 1) "s" else ""} ${disconnected.joinToString(", ")} ${if (disconnected.size > 1) "contain" else "contains"} disconnected (drifting) cells. Please capture again."
+                }
+            }
+            // --- VALIDATION ENDS ---
+
+            val solution: Map<Int, Pair<Int, Int>>? = if (failReason == null) {
+                solveBoard(size, regionIds)
+            } else {
+                null
+            }
+
+            mainHandler.post {
                 dismissLoadingOverlay()
-            }, 30_000L)
+                finishCapturePipeline()
+
+                if (solution == null) {
+                    // Show unsolvable state on overlay
+                    OverlayWindow.show(
+                        applicationContext,
+                        size,
+                        regionIds,
+                        null,
+                        failReason ?: "No valid queen placement exists for this board."
+                    )
+                } else {
+                    // Show solved overlay immediately
+                    OverlayWindow.show(applicationContext, size, regionIds, solution)
+                }
+
+                // Also notify Flutter (if alive) so it can save to library
+                broadcastBoardResult(boardJson)
+                stopSelf()
+            }
 
         } catch (e: java.net.UnknownHostException) {
-            mainHandler.post { dismissLoadingOverlay(); finishCapturePipeline(); showToast("No internet connection.") }
+            mainHandler.post { dismissLoadingOverlay(); finishCapturePipeline(); showToast("No internet connection."); stopSelf() }
         } catch (e: java.net.SocketTimeoutException) {
-            mainHandler.post { dismissLoadingOverlay(); finishCapturePipeline(); showToast("Server timed out. Try again.") }
+            mainHandler.post { dismissLoadingOverlay(); finishCapturePipeline(); showToast("Server timed out. Try again."); stopSelf() }
         } catch (e: Exception) {
-            mainHandler.post { dismissLoadingOverlay(); finishCapturePipeline(); showToast("Error: ${e.message?.take(80)}") }
+            mainHandler.post { dismissLoadingOverlay(); finishCapturePipeline(); showToast("Error: ${e.message?.take(80)}"); stopSelf() }
         }
+    }
+
+    private fun isRegionConnected(size: Int, regionIds: List<List<Int>>, regionId: Int): Boolean {
+        val coords = mutableListOf<Pair<Int, Int>>()
+        for (r in 0 until size) {
+            for (c in 0 until size) {
+                if (regionIds[r][c] == regionId) {
+                    coords.add(Pair(r, c))
+                }
+            }
+        }
+        if (coords.isEmpty()) return true
+
+        val coordsSet = coords.map { "${it.first},${it.second}" }.toSet()
+        val visited = mutableSetOf<String>()
+
+        val queue = mutableListOf<Pair<Int, Int>>()
+        queue.add(coords.first())
+        visited.add("${coords.first().first},${coords.first().second}")
+
+        var head = 0
+        while (head < queue.size) {
+            val current = queue[head++]
+            val neighbors = listOf(
+                Pair(current.first + 1, current.second),
+                Pair(current.first - 1, current.second),
+                Pair(current.first, current.second + 1),
+                Pair(current.first, current.second - 1)
+            )
+            for (neighbor in neighbors) {
+                val key = "${neighbor.first},${neighbor.second}"
+                if (coordsSet.contains(key) && !visited.contains(key)) {
+                    visited.add(key)
+                    queue.add(neighbor)
+                }
+            }
+        }
+
+        return visited.size == coords.size
+    }
+
+    // ── Native solver logic matching solver_logic.dart ──
+    private fun solveBoard(size: Int, regionIds: List<List<Int>>): Map<Int, Pair<Int, Int>>? {
+        val solution = IntArray(size) { -1 }
+
+        var maxRegion = size
+        for (row in regionIds) {
+            for (id in row) {
+                if (id > maxRegion) maxRegion = id
+            }
+        }
+
+        val usedCols    = BooleanArray(size)
+        val usedRegions = BooleanArray(maxRegion + 1)
+
+        fun bt(row: Int): Boolean {
+            if (row == size) return true
+            for (col in 0 until size) {
+                val region = regionIds[row][col]
+                if (region <= 0 || region > maxRegion) continue
+                
+                // Adjacency check: cannot touch the queen in the previous row
+                if (row > 0) {
+                    val prevCol = solution[row - 1]
+                    if (Math.abs(col - prevCol) <= 1) continue
+                }
+
+                if (usedCols[col] || usedRegions[region]) continue
+                
+                solution[row] = col
+                usedCols[col] = true
+                usedRegions[region] = true
+                
+                if (bt(row + 1)) return true
+                
+                solution[row] = -1
+                usedCols[col] = false
+                usedRegions[region] = false
+            }
+            return false
+        }
+
+        if (!bt(0)) return null
+
+        val result = mutableMapOf<Int, Pair<Int, Int>>()
+        for (row in 0 until size) {
+            val col = solution[row]
+            if (col < 0) return null
+            val region = regionIds[row][col]
+            result[region] = Pair(row + 1, col + 1)
+        }
+        return result
     }
 
     // ─────────────────────────────────────────────────────────────────────────
