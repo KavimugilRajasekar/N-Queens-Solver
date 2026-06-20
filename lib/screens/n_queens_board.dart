@@ -4,6 +4,7 @@ import '../widgets/board/board_grid.dart';
 import '../widgets/board/board_palette.dart';
 import '../widgets/board/board_header.dart';
 import '../widgets/board/action_buttons.dart';
+import '../widgets/help_card.dart';
 import '../widgets/notebook_painter.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -19,11 +20,18 @@ class NQueensBoardScreen extends StatefulWidget {
   final bool isAlreadySaved;
   final int? boardId;
 
+  /// True when this screen is being opened from a Daily Quest entry.
+  /// In that case we auto-start manual mode, hide the AI solver and the
+  /// Edit button, and skip the "Save to Library" button since the entry
+  /// is already persisted server-side.
+  final bool isDailyQuest;
+
   const NQueensBoardScreen({
-    super.key, 
-    required this.boardData, 
+    super.key,
+    required this.boardData,
     this.isAlreadySaved = false,
     this.boardId,
+    this.isDailyQuest = false,
   });
 
   @override
@@ -36,7 +44,7 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
   bool _isSolving = false;
   bool _isEditing = false;
   List<List<int>>? _tempGrid;
-  int? _selectedRegionId; 
+  int? _selectedRegionId;
   final ScrollController _logScrollController = ScrollController();
 
   bool _isFastForward = false;
@@ -50,6 +58,14 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
   Timer? _timer;
   final Map<String, int> _manualGrid = {}; // "r,c" -> 0: empty, 1: X, 2: Queen
 
+  // ── Daily-Quest reveal / attempt state ─────────────────────────────────
+  // Mirrors BoardData.isRevealed / attemptsUsed / isFailed so the screen
+  // can react instantly to user input. Persisted back to the same fields
+  // on every state change.
+  bool _isRevealed = false;
+  bool _isFailed = false;
+  int _attemptsUsed = 0;
+
   @override
   void initState() {
     super.initState();
@@ -57,6 +73,26 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
     _boardId = widget.boardId;
     // Puzzles should start empty for the user to solve!
     _queenPositions = {};
+
+    // Hydrate the daily-quiz reveal / attempt state from the persisted
+    // BoardData so a crash mid-attempt still shows the revealed board
+    // (or the locked tile) on the next open.
+    if (widget.isDailyQuest) {
+      _isRevealed = widget.boardData.isRevealed;
+      _isFailed = widget.boardData.isFailed;
+      _attemptsUsed = widget.boardData.attemptsUsed;
+    }
+
+    // Daily Quest entries are server-issued; the user only solves them
+    // by hand. Previously we auto-started manual mode here, which leaked
+    // the board's colored grid before the user tapped REVEAL QUIZ. The
+    // new flow waits for an explicit reveal, unless the board was already
+    // revealed in a prior session (so the user can resume mid-attempt).
+    if (widget.isDailyQuest && _isRevealed && !_isFailed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _startManualMode(resuming: true);
+      });
+    }
   }
 
   @override
@@ -76,6 +112,176 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
         );
       }
     });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Daily-Quest reveal / give-up flow
+  // ─────────────────────────────────────────────────────────────────────
+
+  /// Confirmation dialog that fires before the user burns an attempt on
+  /// REVEAL QUIZ. Cancel returns to the foggy library card; confirm flips
+  /// `_isRevealed`, bumps `_attemptsUsed`, and drops into manual mode.
+  Future<void> _onRevealPressed() async {
+    if (_isRevealed) return; // Defensive: button only shows in pre-reveal state.
+    if (_isFailed) return; // Defensive: locked quests can't be revealed.
+
+    final nextAttempt = _attemptsUsed + 1;
+    final remaining = BoardData.kMaxDailyAttempts - _attemptsUsed;
+    final confirm = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: AppColors.navyBlue, width: 2.5),
+        ),
+        title: const Text(
+          'Reveal Today\'s Quiz?',
+          style: TextStyle(fontFamily: 'DynaPuff', color: AppColors.navyBlue),
+        ),
+        content: Text(
+          remaining == 1
+              ? "This is your LAST attempt — there are no do-overs once you reveal the board."
+              : "Revealing starts attempt $nextAttempt of ${BoardData.kMaxDailyAttempts}. You have $remaining attempts left today.",
+          style: const TextStyle(fontFamily: 'Comfortaa'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(
+              'NOT YET',
+              style: TextStyle(fontFamily: 'DynaPuff', color: Colors.redAccent),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'REVEAL',
+              style: TextStyle(
+                fontFamily: 'DynaPuff',
+                color: AppColors.navyBlue,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (confirm != true) return;
+
+    // Persist the reveal + attempt bump first so a crash mid-board never
+    // leaves the user with a hidden card but a running timer.
+    setState(() {
+      _isRevealed = true;
+      _attemptsUsed = nextAttempt;
+      widget.boardData.isRevealed = true;
+      widget.boardData.attemptsUsed = nextAttempt;
+    });
+    await _persistDailyBoard();
+    if (!mounted) return;
+    await _startManualMode();
+  }
+
+  /// GIVE UP — user walks out of the running attempt. Counts as one failed
+  /// attempt. If this pushes `attemptsUsed` to `kMaxDailyAttempts`, flip
+  /// `isFailed` so the card goes light-red and the lock screen renders.
+  Future<void> _onGiveUpPressed() async {
+    if (!_isRevealed || _isFailed) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: Colors.redAccent, width: 2.5),
+        ),
+        title: const Text(
+          'Give Up?',
+          style: TextStyle(fontFamily: 'DynaPuff', color: Colors.redAccent),
+        ),
+        content: Text(
+          _attemptsUsed >= BoardData.kMaxDailyAttempts
+              ? "This is your final attempt. Backing out now locks today's quiz."
+              : "Backing out counts as a failed attempt. You'll have ${BoardData.kMaxDailyAttempts - _attemptsUsed - 1} attempt(s) left after this.",
+          style: const TextStyle(fontFamily: 'Comfortaa'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(
+              'KEEP PLAYING',
+              style: TextStyle(fontFamily: 'DynaPuff', color: AppColors.navyBlue),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'GIVE UP',
+              style: TextStyle(
+                fontFamily: 'DynaPuff',
+                color: Colors.redAccent,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (confirm != true) return;
+
+    await _finalizeDailyAttempt(success: false);
+  }
+
+  /// Persist the daily-quest attempt result and pop back to the library
+  /// when the user gives up. On success (solved) the existing
+  /// `_checkWinCondition` path already handles persistence; on failure we
+  /// bump the attempt counter and lock if the cap is hit.
+  Future<void> _finalizeDailyAttempt({required bool success}) async {
+    _timer?.cancel();
+    final attemptsBefore = _attemptsUsed;
+    final shouldLock = !success && attemptsBefore >= BoardData.kMaxDailyAttempts;
+    setState(() {
+      if (!success) {
+        _attemptsUsed = attemptsBefore + 1;
+        widget.boardData.attemptsUsed = _attemptsUsed;
+      }
+      if (shouldLock) {
+        _isFailed = true;
+        widget.boardData.isFailed = true;
+      }
+      _isManualMode = false;
+    });
+    // Wipe the in-progress manual grid so a re-open (which won't be
+    // possible while locked) doesn't accidentally restore stale marks.
+    _manualGrid.clear();
+    _secondsElapsed = 0;
+    await _persistDailyBoard();
+    if (!mounted) return;
+    Navigator.pop(context);
+  }
+
+  /// Persist the current daily-quest BoardData back to disk + (re)write
+  /// its row in saved_boards.json. No-op for non-daily boards.
+  Future<void> _persistDailyBoard() async {
+    if (!widget.isDailyQuest) return;
+    if (_boardId == null || !_isSaved) {
+      // Edge case: a non-saved daily quest (shouldn't happen in normal
+      // flow but guard against it so we don't silently lose state).
+      final id = await StorageManager.saveBoard(widget.boardData);
+      if (mounted) {
+        setState(() {
+          _isSaved = true;
+          _boardId = id;
+        });
+      }
+      return;
+    }
+    await StorageManager.updateBoard(_boardId!, widget.boardData);
   }
 
   Future<void> _startSolving() async {
@@ -123,7 +329,7 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
     });
   }
 
-  Future<void> _startManualMode() async {
+  Future<void> _startManualMode({bool resuming = false}) async {
     if (_isSolving || _isEditing) return;
 
     final solver = NQueensSolver(widget.boardData);
@@ -143,6 +349,77 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
         );
       }
       return;
+    }
+
+    // ── Resume an in-progress game? ──────────────────────────────────────
+    // If we have a boardId, ask StorageManager whether the user previously
+    // quit mid-game. If so, offer to resume — silently overwriting their
+    // work-in-progress is what made the old code feel "broken" when the
+    // user backed out and re-entered. We only do this when the saved grid
+    // actually has marks; an empty saved grid means a stale / no-op entry.
+    if (_boardId != null) {
+      final saved = await StorageManager.loadManualProgress(_boardId!);
+      if (saved != null && saved.manualGrid.isNotEmpty) {
+        if (!mounted) return;
+        final resume = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: const BorderSide(color: AppColors.navyBlue, width: 2.5),
+            ),
+            title: const Text(
+              'Resume your game?',
+              style: TextStyle(fontFamily: 'DynaPuff', color: AppColors.navyBlue),
+            ),
+            content: Text(
+              'You have an in-progress game with ${saved.manualGrid.length} marks and ${formatTime(saved.secondsElapsed)} on the clock. Pick up where you left off?',
+              style: const TextStyle(fontFamily: 'Comfortaa'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text(
+                  'Start fresh',
+                  style: TextStyle(fontFamily: 'DynaPuff', color: Colors.redAccent),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text(
+                  'Resume',
+                  style: TextStyle(fontFamily: 'DynaPuff', color: AppColors.navyBlue),
+                ),
+              ),
+            ],
+          ),
+        );
+        if (!mounted) return;
+        if (resume == true) {
+          setState(() {
+            _isManualMode = true;
+            _isPaused = saved.isPaused;
+            _secondsElapsed = saved.secondsElapsed;
+            _manualGrid
+              ..clear()
+              ..addAll(saved.manualGrid);
+            _queenPositions.clear();
+          });
+          _updateQueenPositionsFromManual();
+          if (!_isPaused) _startTimer();
+          return;
+        }
+        // "Start fresh" — drop the stale entry.
+        await StorageManager.saveManualProgress(
+          _boardId!,
+          manualGrid: const {},
+          secondsElapsed: 0,
+          isPaused: false,
+          clear: true,
+        );
+      }
     }
 
     setState(() {
@@ -168,6 +445,42 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
     setState(() {
       _isPaused = !_isPaused;
     });
+    // Mirror the timer state to disk so a resume picks up "paused" if the
+    // user backs out while paused.
+    if (_boardId != null && _isManualMode) {
+      StorageManager.saveManualProgress(
+        _boardId!,
+        manualGrid: Map<String, int>.from(_manualGrid),
+        secondsElapsed: _secondsElapsed,
+        isPaused: _isPaused,
+      );
+    }
+  }
+
+  /// Quit manual mode but KEEP the in-progress grid + timer so the user can
+  /// resume next time they open this board. Without this, the old code did
+  /// ``setState(manual = false)`` which wiped nothing in memory but also
+  /// offered no resume on the next ``Do it`` tap.
+  void _quitManualMode() {
+    // Daily Quests don't have a "save & quit" path — backing out counts
+    // as a failed attempt. Delegate to the give-up flow which handles
+    // attempt bookkeeping + (optionally) lock state.
+    if (widget.isDailyQuest && _isRevealed && !widget.boardData.isManuallySolved) {
+      _onGiveUpPressed();
+      return;
+    }
+    _timer?.cancel();
+    setState(() {
+      _isManualMode = false;
+    });
+    if (_boardId != null) {
+      StorageManager.saveManualProgress(
+        _boardId!,
+        manualGrid: Map<String, int>.from(_manualGrid),
+        secondsElapsed: _secondsElapsed,
+        isPaused: false,
+      );
+    }
   }
 
   void _handleManualTap(int r, int c) {
@@ -178,6 +491,16 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
       _manualGrid[key] = (current + 1) % 3;
       _updateQueenPositionsFromManual();
     });
+    // Persist after every tap so an unexpected kill (background process
+    // trim, OS reboot, etc.) never loses more than one mark.
+    if (_boardId != null) {
+      StorageManager.saveManualProgress(
+        _boardId!,
+        manualGrid: Map<String, int>.from(_manualGrid),
+        secondsElapsed: _secondsElapsed,
+        isPaused: _isPaused,
+      );
+    }
     _checkWinCondition();
   }
 
@@ -219,8 +542,26 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
 
       if (!conflict && regions.length == widget.boardData.size) {
         _timer?.cancel();
-        
+
+        // Solved — drop the resume snapshot so the next manual session
+        // starts fresh.
+        if (_boardId != null) {
+          StorageManager.saveManualProgress(
+            _boardId!,
+            manualGrid: const {},
+            secondsElapsed: 0,
+            isPaused: false,
+            clear: true,
+          );
+        }
+
         widget.boardData.isManuallySolved = true;
+        // A win resets the attempt counter for completeness, even though
+        // the card's gold theme + trophy badge is the main signal.
+        if (widget.isDailyQuest) {
+          widget.boardData.attemptsUsed = _attemptsUsed;
+          widget.boardData.isFailed = false;
+        }
         if (_isSaved && _boardId != null) {
           StorageManager.updateBoard(_boardId!, widget.boardData);
         } else {
@@ -385,6 +726,35 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
         }
       }
 
+      // Reject edits that produce 0 or 2+ solutions. The board invariant
+      // is "exactly one solution exists", so silently accepting an
+      // ambiguous edit would let the user break their own game.
+      final candidate = BoardData(
+        size: widget.boardData.size,
+        regionIds: widget.boardData.regionIds,
+        regions: newRegions,
+        rawResponse: widget.boardData.rawResponse,
+      );
+      final uniquenessCheck = NQueensSolver(candidate).countSolutions(maxCount: 2);
+      if (uniquenessCheck == 0) {
+        FunkyErrorDialog.show(
+          context,
+          title: 'No Solution!',
+          message:
+              'Your new layout has no valid queen placement. Try repainting — usually one region is too big or two regions are too small.',
+        );
+        return;
+      }
+      if (uniquenessCheck > 1) {
+        FunkyErrorDialog.show(
+          context,
+          title: 'Multiple Solutions!',
+          message:
+              'Your new layout has more than one valid answer. Add more region boundaries or shrink a region so only one placement works.',
+        );
+        return;
+      }
+
       widget.boardData.regions.clear();
       widget.boardData.regions.addAll(newRegions);
       widget.boardData.solution = null;
@@ -392,9 +762,20 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
       widget.boardData.isManuallySolved = false;
       _queenPositions.clear();
       _solverSteps.clear();
+      // Region layout changed — wipe any in-progress resume state since
+      // the saved marks would no longer make sense on a new board.
+      _manualGrid.clear();
+      _secondsElapsed = 0;
 
       if (_isSaved && _boardId != null) {
         StorageManager.updateBoard(_boardId!, widget.boardData);
+        StorageManager.saveManualProgress(
+          _boardId!,
+          manualGrid: const {},
+          secondsElapsed: 0,
+          isPaused: false,
+          clear: true,
+        );
       }
     }
     setState(() {
@@ -491,6 +872,9 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
                       isEditing: _isEditing,
                       isManualMode: _isManualMode,
                       isPaused: _isPaused,
+                      // Daily Quest: paint fog until the user reveals.
+                      isDailyQuest: widget.isDailyQuest,
+                      isRevealed: widget.isDailyQuest ? _isRevealed : true,
                       queenPositions: _queenPositions,
                       manualGrid: _manualGrid,
                       tempGrid: _tempGrid,
@@ -506,19 +890,37 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
                       isEditing: _isEditing,
                       hasConflicts: _hasConflicts(),
                       formattedTime: formatTime(_secondsElapsed),
+                      isDailyQuest: widget.isDailyQuest,
+                      // Daily-quest flags — drive the REVEAL / GIVE UP /
+                      // LOCKED branches in the action bar.
+                      isRevealed: widget.isDailyQuest ? _isRevealed : true,
+                      isFailed: widget.isDailyQuest ? _isFailed : false,
+                      attemptLabel: widget.isDailyQuest && _isRevealed && !_isFailed
+                          ? 'Attempt $_attemptsUsed of ${BoardData.kMaxDailyAttempts}'
+                          : '',
+                      onReveal: _onRevealPressed,
+                      onGiveUp: _onGiveUpPressed,
                       onTogglePause: _togglePause,
-                      onQuitManual: () => setState(() { _isManualMode = false; _timer?.cancel(); }),
-                      onToggleEdit: _toggleEditMode,
+                      onQuitManual: _quitManualMode,
+                      onToggleEdit: widget.isDailyQuest ? () {} : _toggleEditMode,
                       onSolve: _startSolving,
                       onSaveEdits: _saveEdits,
                       onStartManual: _startManualMode,
                     ),
+                    const SizedBox(height: 24),
+                    HelpCard(
+                      kind: _isManualMode
+                          ? HelpKind.play
+                          : (_isSolving ? HelpKind.aiSolver : HelpKind.play),
+                      rotation: -0.008,
+                      initiallyCollapsed: _isManualMode || _isSolving,
+                    ),
                     if (!_isManualMode) ...[
                       const SizedBox(height: 30),
-                      if (!_isEditing && _solverSteps.isNotEmpty) 
+                      if (!_isEditing && _solverSteps.isNotEmpty)
                         AlgorithmFlow(
-                          solverSteps: _solverSteps, 
-                          scrollController: _logScrollController, 
+                          solverSteps: _solverSteps,
+                          scrollController: _logScrollController,
                           boardData: widget.boardData,
                         ),
                       const SizedBox(height: 30),
@@ -538,7 +940,7 @@ class _NQueensBoardScreenState extends State<NQueensBoardScreen> {
   Widget _buildLibraryButtons() {
     return Column(
       children: [
-        if (!_isSaved)
+        if (!_isSaved && !widget.isDailyQuest)
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: Transform.rotate(

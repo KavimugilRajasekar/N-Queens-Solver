@@ -147,6 +147,118 @@ class NQueensSolver {
     return _regionCells.map((key, value) => MapEntry(key, value.toSet()));
   }
 
+  /// Count the number of distinct valid solutions, stopping early once
+  /// [maxCount] is reached.
+  ///
+  /// Used to verify the puzzle invariant "exactly one solution exists"
+  /// before persisting a generated / manually-painted / server-issued
+  /// board. A board with 0 solutions is unsolvable; a board with 2+ has
+  /// ambiguous answers and must be rejected (or repainted) so the
+  /// "win" check is meaningful.
+  int countSolutions({int maxCount = 2}) {
+    final blocked = List<bool>.filled(n * n, false);
+    final regionsList = List.generate(n + 1, (_) => <Point>[]);
+    boardData.regions.forEach((id, region) {
+      regionsList[id] = List<Point>.from(region.coordinates);
+    });
+    final solution = List<Point?>.filled(n + 1, null);
+    return _countRecursive(
+      rowMask: 0,
+      colMask: 0,
+      blocked: blocked,
+      regionsList: regionsList,
+      solution: solution,
+      solutionCount: 0,
+      maxCount: maxCount,
+    );
+  }
+
+  int _countRecursive({
+    required int rowMask,
+    required int colMask,
+    required List<bool> blocked,
+    required List<List<Point>> regionsList,
+    required List<Point?> solution,
+    required int solutionCount,
+    required int maxCount,
+  }) {
+    if (solutionCount == n) {
+      return 1;
+    }
+
+    int bestId = -1;
+    int minSize = 100000;
+
+    for (int id = 1; id <= n; id++) {
+      if (solution[id] != null) continue;
+      
+      int validCount = 0;
+      for (final cell in regionsList[id]) {
+        final r = cell.x.toInt() - 1;
+        final c = cell.y.toInt() - 1;
+        if ((rowMask & (1 << r)) == 0 &&
+            (colMask & (1 << c)) == 0 &&
+            !blocked[r * n + c]) {
+          validCount++;
+        }
+      }
+
+      if (validCount < minSize) {
+        minSize = validCount;
+        bestId = id;
+        if (minSize == 0) return 0;
+      }
+    }
+
+    if (bestId == -1) return 0;
+
+    int total = 0;
+    for (final cell in regionsList[bestId]) {
+      final r = cell.x.toInt() - 1;
+      final c = cell.y.toInt() - 1;
+      
+      if ((rowMask & (1 << r)) != 0) continue;
+      if ((colMask & (1 << c)) != 0) continue;
+      if (blocked[r * n + c]) continue;
+
+      final newBlocks = <int>[];
+      for (int dr = -1; dr <= 1; dr++) {
+        for (int dc = -1; dc <= 1; dc++) {
+          final nr = r + dr;
+          final nc = c + dc;
+          if (nr >= 0 && nr < n && nc >= 0 && nc < n) {
+            final idx = nr * n + nc;
+            if (!blocked[idx]) {
+              blocked[idx] = true;
+              newBlocks.add(idx);
+            }
+          }
+        }
+      }
+
+      solution[bestId] = cell;
+      
+      total += _countRecursive(
+        rowMask: rowMask | (1 << r),
+        colMask: colMask | (1 << c),
+        blocked: blocked,
+        regionsList: regionsList,
+        solution: solution,
+        solutionCount: solutionCount + 1,
+        maxCount: maxCount - total,
+      );
+
+      solution[bestId] = null;
+      for (final idx in newBlocks) {
+        blocked[idx] = false;
+      }
+
+      if (total >= maxCount) return total;
+    }
+
+    return total;
+  }
+
   int? _selectRegionMRV() {
     int? bestId;
     int minSize = 100000;

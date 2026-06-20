@@ -131,6 +131,16 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
 
+                "createNotificationChannels" -> {
+                    // FCM requires an Android notification channel to exist
+                    // before any data/notification message can render a tray
+                    // alert on Android 8+. We create the channels declared in
+                    // AndroidManifest here so the broadcast payloads from the
+                    // server (daily_quest, match_invite) actually appear.
+                    createNotificationChannels()
+                    result.success(null)
+                }
+
                 else -> result.notImplemented()
             }
         }
@@ -407,5 +417,56 @@ class MainActivity : FlutterActivity() {
             solution,
             failReason
         )
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Notification channels
+    // ─────────────────────────────────────────────────────────────────────────
+    //
+    // FCM requires Android notification channels (API 26+) to exist before any
+    // data/notification message can render a tray alert. The AndroidManifest
+    // declares ``high_importance_channel`` as the FCM default and the server
+    // broadcasts ``daily_quest``/``match_invite`` payloads tagged with the
+    // channel id. Without this bootstrap the alerts are silently dropped.
+
+    private fun createNotificationChannels() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            // Pre-Oreo: channels are not needed — legacy notifications always
+            // show. Nothing to do.
+            return
+        }
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+
+        val dailyQuest = android.app.NotificationChannel(
+            "daily_quest",
+            "Daily Quest",
+            android.app.NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            description = "Alerts you when a new Daily Quest puzzle is published."
+            enableLights(true)
+            enableVibration(true)
+        }
+
+        val matchInvite = android.app.NotificationChannel(
+            "n_queens_match_invite",
+            "Multiplayer Invites",
+            android.app.NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            description = "Friend invites you to a head-to-head N-Queens match."
+            enableLights(true)
+            enableVibration(true)
+        }
+
+        val highImportance = android.app.NotificationChannel(
+            "high_importance_channel",
+            "Important Alerts",
+            android.app.NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            description = "High-priority alerts and updates."
+            enableLights(true)
+            enableVibration(true)
+        }
+
+        nm.createNotificationChannels(listOf(dailyQuest, matchInvite, highImportance))
     }
 }

@@ -3,7 +3,9 @@ import 'package:camera/camera.dart';
 import 'constants/colors.dart';
 import 'screens/landing_page.dart';
 
+import 'utils/daily_quest_manager.dart';
 import 'utils/firebase_game_manager.dart';
+import 'utils/notification_channel_service.dart';
 import 'utils/screenshot_solver_service.dart';
 import 'utils/share_handler_service.dart';
 
@@ -16,6 +18,15 @@ Future<void> main() async {
 
   // Initialize Firebase and FCM
   await FirebaseGameManager.instance.initializeFirebase();
+
+  // Wire the global navigator key into DailyQuestManager so its foreground
+  // FCM handler can pop a snackbar (FCM does not show a tray alert while
+  // the app is in the foreground by default).
+  DailyQuestManager.navigatorKey = appNavigatorKey;
+
+  // Create the Android notification channels the FCM payloads target so
+  // daily-quest + invite tray alerts actually render on Android 8+.
+  await NotificationChannelService.bootstrap();
 
   // Initialize the screenshot solver event channel listener
   ScreenshotSolverService.instance.initialize();

@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'board_processor.dart';
 import '../constants/region_colors.dart';
+import 'daily_quest_manager.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FirebaseGameManager
@@ -99,19 +100,39 @@ class FirebaseGameManager {
       FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundMessageHandler);
 
       FirebaseMessaging.onMessage.listen((msg) async {
-        if (msg.data['type'] == 'invite') await _handleInviteFromFCM(msg.data);
+        final type = msg.data['type'];
+        if (type == 'invite') {
+          await _handleInviteFromFCM(msg.data);
+        } else if (type == 'daily_quest') {
+          await DailyQuestManager.instance.handleFcm(msg.data);
+        }
       });
 
       FirebaseMessaging.onMessageOpenedApp.listen((msg) async {
-        if (msg.data['type'] == 'invite') await _handleInviteFromFCM(msg.data);
+        final type = msg.data['type'];
+        if (type == 'invite') {
+          await _handleInviteFromFCM(msg.data);
+        } else if (type == 'daily_quest') {
+          await DailyQuestManager.instance.handleFcm(msg.data);
+        }
       });
 
       final initial = await messaging.getInitialMessage();
-      if (initial != null && initial.data['type'] == 'invite') {
-        await _handleInviteFromFCM(initial.data);
+      if (initial != null) {
+        final type = initial.data['type'];
+        if (type == 'invite') {
+          await _handleInviteFromFCM(initial.data);
+        } else if (type == 'daily_quest') {
+          await DailyQuestManager.instance.handleFcm(initial.data);
+        }
       }
 
       await registerPlayerProfile();
+
+      // Catch up on today's Daily Quest whether or not the FCM arrived.
+      // This is the safety net for users who dismissed the notification
+      // or installed the app for the first time after 4 PM IST.
+      await DailyQuestManager.instance.checkForNewQuest();
     } catch (e) {
       debugPrint('Firebase init failed: $e');
     }
