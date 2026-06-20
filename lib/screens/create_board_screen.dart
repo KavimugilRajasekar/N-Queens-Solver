@@ -4,7 +4,9 @@ import 'package:camera/camera.dart';
 import '../constants/colors.dart';
 import '../utils/board_processor.dart';
 import '../constants/region_colors.dart';
+import '../utils/solver_logic.dart';
 import '../utils/storage_manager.dart';
+import '../widgets/help_card.dart';
 import '../widgets/notebook_painter.dart';
 import 'n_queens_board.dart';
 
@@ -71,13 +73,40 @@ class _CreateBoardScreenState extends State<CreateBoardScreen> {
     }
 
     final board = BoardData(
-      size: _size, 
-      regionIds: List.generate(_size, (r) => List.from(_grid![r])), 
+      size: _size,
+      regionIds: List.generate(_size, (r) => List.from(_grid![r])),
       regions: regions,
       rawResponse: "Manually Created Board",
     );
+
+    // 3. Validate: Exactly one solution. A board with 0 solutions is
+    //    unsolvable; a board with 2+ has ambiguous answers and would
+    //    break the "win" check. Repaint the regions until the layout
+    //    forces a single canonical answer.
+    final uniquenessCheck = NQueensSolver(board).countSolutions(maxCount: 2);
+    if (uniquenessCheck == 0) {
+      if (!mounted) return;
+      FunkyErrorDialog.show(
+        context,
+        title: 'No Solution!',
+        message:
+            'This layout has no valid queen placement. Try repainting — usually one region is too big or two regions are too small.',
+      );
+      return;
+    }
+    if (uniquenessCheck > 1) {
+      if (!mounted) return;
+      FunkyErrorDialog.show(
+        context,
+        title: 'Multiple Solutions!',
+        message:
+            'This layout has more than one valid answer. Add more region boundaries or shrink a region so only one placement works.',
+      );
+      return;
+    }
+
     final id = await StorageManager.saveBoard(board, name: 'Custom ${_size}x$_size');
-    
+
     if (mounted) {
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => NQueensBoardScreen(boardData: board, isAlreadySaved: true, boardId: id)));
     }
@@ -164,6 +193,11 @@ class _CreateBoardScreenState extends State<CreateBoardScreen> {
                 const SizedBox(width: 16),
                 Expanded(child: _buildActionBtn('Next Step', _initializeGrid)),
               ],
+            ),
+            const SizedBox(height: 24),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: HelpCard(kind: HelpKind.create, rotation: -0.005),
             ),
           ],
         ),

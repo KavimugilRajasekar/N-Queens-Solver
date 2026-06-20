@@ -33,6 +33,43 @@ class BoardData {
   Map<int, Point>? solution;
   bool isManuallySolved;
 
+  /// True when this board was downloaded from the server-side Daily Quest
+  /// pipeline. Daily Quest entries are read-only and auto-played in manual
+  /// mode; the UI uses this flag to switch card theme and gate actions.
+  bool isDailyQuest;
+
+  /// ISO calendar date 'YYYY-MM-DD' of the Daily Quest. Null for normal boards.
+  String? questDate;
+
+  /// Server-picked title for the Daily Quest (e.g. "Morning Crown"). Null for
+  /// normal boards; falls back to the default "Board N" name when missing.
+  String? questTitle;
+
+  // ── Daily-Quest attempt lifecycle ────────────────────────────────────
+  // The server ships exactly one board per day; the *client* owns the
+  // attempt counter because the server has no concept of "the user quit
+  // early". Three attempts per day is enforced client-side and persists
+  // across app restarts via StorageManager.
+
+  /// Number of failed attempts the user has burned on this quest today.
+  /// Wins reset this to 0 via the daily-quest save path; the lock
+  /// (`isFailed`) only flips once `attemptsUsed` hits 3.
+  int attemptsUsed;
+
+  /// True once the user has tapped REVEAL QUIZ on this quest today.
+  /// Persisted so a crash mid-attempt still shows the revealed board on
+  /// the next open instead of bouncing back to a foggy tile.
+  bool isRevealed;
+
+  /// True once the user has burned all [kMaxDailyAttempts] attempts and
+  /// failed to solve. The card turns light-red, the entry is locked, and
+  /// the REVEAL button is replaced with a "Today's quest is locked" message.
+  bool isFailed;
+
+  /// Hard cap on attempts. Centralised so the lock logic and the REVEAL
+  /// confirmation dialog stay in sync.
+  static const int kMaxDailyAttempts = 3;
+
   BoardData({
     required this.size,
     required this.regionIds,
@@ -40,6 +77,12 @@ class BoardData {
     required this.rawResponse,
     this.solution,
     this.isManuallySolved = false,
+    this.isDailyQuest = false,
+    this.questDate,
+    this.questTitle,
+    this.attemptsUsed = 0,
+    this.isRevealed = false,
+    this.isFailed = false,
   });
 }
 

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../constants/colors.dart';
 import '../utils/board_generator.dart';
+import '../utils/solver_logic.dart';
 import '../utils/storage_manager.dart';
+import '../widgets/help_card.dart';
 import '../widgets/notebook_painter.dart';
 import '../widgets/error_dialog.dart';
 import '../widgets/success_dialog.dart';
@@ -44,27 +46,52 @@ class _GenerateBoardScreenState extends State<GenerateBoardScreen> {
 
     if (mounted) {
       if (board != null) {
-        // Save with the generated solution to ensure it's 100% solvable
+        // The seeder bakes its own queen permutation into `board.solution`
+        // so the BFS has seeds to grow from. That solution is the
+        // canonical answer we want the user to rediscover, but we
+        // re-verify it via the independent solver before saving —
+        // protects against any future seeder refactor that might
+        // accidentally store a stale / mismatched queen layout.
+        Map<int, Point>? verifiedSolution;
+        final solver = NQueensSolver(board);
+        await for (final step in solver.solve()) {
+          if (step.message.startsWith('SUCCESS:')) {
+            verifiedSolution = Map<int, Point>.from(step.queenPositions);
+            break;
+          }
+        }
+        if (verifiedSolution == null) {
+          // Should be unreachable — generateUniqueBoard enforces
+          // uniqueness. Guard anyway so a stale entry can't ship.
+          FunkyErrorDialog.show(
+            context,
+            message:
+                'Generated board failed verification. Try a different size or retry.',
+          );
+          setState(() => _isGenerating = false);
+          return;
+        }
+
         final finalBoard = BoardData(
           size: board.size,
           regionIds: board.regionIds,
           regions: board.regions,
           rawResponse: "AI Generated Puzzle",
-          solution: board.solution, // Keep the valid solution!
+          solution: verifiedSolution,
           isManuallySolved: false,
         );
 
         final id = await StorageManager.saveBoard(finalBoard, name: _nameController.text.trim());
-        
+
         await FunkySuccessDialog.show(
-          context, 
-          title: 'Board Ready!', 
+          context,
+          title: 'Board Ready!',
           message: 'A brand new ${_size}x$_size puzzle has been generated just for you!',
         );
 
         if (mounted) {
           Navigator.pushReplacement(
-            context, 
+            context,
             MaterialPageRoute(builder: (context) => NQueensBoardScreen(boardData: finalBoard, isAlreadySaved: true, boardId: id))
           );
         }
@@ -108,9 +135,11 @@ class _GenerateBoardScreenState extends State<GenerateBoardScreen> {
                     _buildSizePicker(),
                     
                     const SizedBox(height: 60),
-                    
+
                     // Generate Button
                     _buildGenerateButton(),
+                    const SizedBox(height: 24),
+                    HelpCard(kind: HelpKind.generate, rotation: -0.008),
                   ],
                 ),
               ),

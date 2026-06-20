@@ -4,6 +4,7 @@ import 'dart:convert';
 import '../constants/colors.dart';
 import '../utils/board_processor.dart';
 import '../utils/storage_manager.dart';
+import '../utils/daily_quest_manager.dart';
 import '../widgets/notebook_painter.dart';
 import 'camera_screen.dart';
 import 'create_board_screen.dart';
@@ -39,21 +40,25 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
   void initState() {
     super.initState();
     _refreshBoards();
-    
-    // Initialize Shake detector
+
+    // Listen for daily-quest downloads so the library auto-refreshes
+    // when an FCM arrives while the screen is open.
+    DailyQuestManager.instance.newQuestAvailable.addListener(_onQuestAvailable);
+
+    // Initialise Shake detector
     _shakeDetector = ShakeDetector.autoStart(
       onPhoneShake: (_) {
         if (!_isSelectionMode) {
           setState(() => _isRenameMode = !_isRenameMode);
-          
+
           // Provide Haptic Feedback
           Feedback.forLongPress(context);
-          
+
           // Visual confirmation
           ScaffoldMessenger.of(context).hideCurrentSnackBar(); // Remove existing if any
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(_isRenameMode ? 'Switch to ✏️' : 'Switch to 🗑️', 
+              content: Text(_isRenameMode ? 'Switch to ✏️' : 'Switch to 🗑️',
                 style: const TextStyle(fontFamily: 'DynaPuff', color: Colors.white, fontSize: 16)),
               duration: const Duration(seconds: 1),
               behavior: SnackBarBehavior.floating,
@@ -72,14 +77,29 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
     );
   }
 
+  void _onQuestAvailable() {
+    if (!mounted) return;
+    if (DailyQuestManager.instance.newQuestAvailable.value) {
+      // Acknowledge and refresh so the notifier stays single-shot.
+      DailyQuestManager.instance.newQuestAvailable.value = false;
+      _refreshBoards();
+    }
+  }
+
   @override
   void dispose() {
+    DailyQuestManager.instance.newQuestAvailable.removeListener(_onQuestAvailable);
     _shakeDetector?.stopListening();
     super.dispose();
   }
 
   Future<void> _refreshBoards() async {
     setState(() => _isLoading = true);
+
+    // Pull any newly-published daily quest before refreshing the list so
+    // the user immediately sees the latest challenge without a manual pull.
+    await DailyQuestManager.instance.checkForNewQuest();
+
     final boards = await StorageManager.loadBoards();
     setState(() {
       _savedBoards = boards;
@@ -448,9 +468,9 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
                   ),
                 ),
                 Expanded(
-                  child: _isLoading 
+                  child: _isLoading
                     ? const Center(child: CircularProgressIndicator(color: AppColors.navyBlue))
-                    : _savedBoards.isEmpty 
+                    : _savedBoards.isEmpty
                       ? _buildEmptyState()
                       : ListView.builder(
                           padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -458,25 +478,35 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
                           itemBuilder: (context, index) {
                             final data = _savedBoards[index];
                             final selectionIndex = _selectedIds.indexOf(data['id']);
+                            final board = data['board'] as BoardData;
+                            final isDaily = board.isDailyQuest;
                             return LibraryBoardCard(
                               data: data,
                               isSelectionMode: _isSelectionMode,
                               isSelected: selectionIndex != -1,
                               selectionIndex: selectionIndex != -1 ? selectionIndex : null,
                               isRenameMode: _isRenameMode,
-                              onToggleSelection: () {
-                                setState(() {
-                                  if (_selectedIds.contains(data['id'])) {
-                                    _selectedIds.remove(data['id']);
-                                  } else {
-                                    if (_selectedIds.length >= 7) {
-                                      FunkyErrorDialog.show(context, message: "Whoa! You can only share 7 boards at a time to keep the QR code easy to scan.");
-                                      return;
-                                    }
-                                    _selectedIds.add(data['id']);
-                                  }
-                                });
-                              },
+                              isDailyQuest: isDaily,
+                              hasUnseenNotification: isDaily && !board.isManuallySolved,
+                              onToggleSelection: isDaily
+                                  ? () {} // Daily quests are non-exportable.
+                                  : () {
+                                      setState(() {
+                                        if (_selectedIds.contains(data['id'])) {
+                                          _selectedIds.remove(data['id']);
+                                        } else {
+                                          if (_selectedIds.length >= 7) {
+                                            FunkyErrorDialog.show(
+                                              context,
+                                              message:
+                                                  "Whoa! You can only share 7 boards at a time to keep the QR code easy to scan.",
+                                            );
+                                            return;
+                                          }
+                                          _selectedIds.add(data['id']);
+                                        }
+                                      });
+                                    },
                               onRename: () => _showRenameDialog(data['id'], data['name']),
                               onDelete: () => _confirmDelete(data['id']),
                               onRefresh: _refreshBoards,
@@ -509,6 +539,20 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
 
 
   void _showRenameDialog(int id, String currentName) {
+    final entry = _savedBoards.firstWhere(
+      (e) => e['id'] == id,
+      orElse: () => const {},
+    );
+    final isDaily = (entry['board'] as BoardData?)?.isDailyQuest ?? false;
+    if (isDaily) {
+      FunkyErrorDialog.show(
+        context,
+        title: 'Read-Only!',
+        message:
+            'Daily Quest titles are picked by the server and can\'t be changed.',
+      );
+      return;
+    }
     final controller = TextEditingController(text: currentName);
     showDialog(
       context: context,
@@ -532,7 +576,7 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
                 Navigator.pop(context);
                 _refreshBoards();
               }
-            }, 
+            },
             child: const Text('Save'),
           ),
         ],
@@ -541,6 +585,20 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
   }
 
   void _confirmDelete(int id) {
+    final entry = _savedBoards.firstWhere(
+      (e) => e['id'] == id,
+      orElse: () => const {},
+    );
+    final isDaily = (entry['board'] as BoardData?)?.isDailyQuest ?? false;
+    if (isDaily) {
+      FunkyErrorDialog.show(
+        context,
+        title: 'Read-Only!',
+        message:
+            'Daily Quests are issued by the server and can\'t be deleted. Conquer it to earn the trophy badge!',
+      );
+      return;
+    }
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -553,7 +611,7 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
               await StorageManager.deleteBoard(id);
               Navigator.pop(context);
               _refreshBoards();
-            }, 
+            },
             child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
         ],
@@ -590,7 +648,9 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
     final List<Map<String, dynamic>> exportData = [];
     for (var boardData in _savedBoards) {
       if (_selectedIds.contains(boardData['id'])) {
-        final BoardData board = boardData['board'];
+        // Defensive: daily quests are non-exportable; skip silently.
+        final board = boardData['board'] as BoardData;
+        if (board.isDailyQuest) continue;
         exportData.add({
           'name': boardData['name'],
           'size': board.size,
@@ -598,7 +658,16 @@ class _SavedBoardsScreenState extends State<SavedBoardsScreen> {
         });
       }
     }
-    
+
+    if (exportData.isEmpty) {
+      FunkyErrorDialog.show(
+        context,
+        title: 'Nothing to Share!',
+        message: 'Only regular boards can be shared via QR. Pick a non-Daily-Quest entry.',
+      );
+      return;
+    }
+
     final String jsonStr = jsonEncode(exportData);
     final String encryptedData = QRCrypto.encrypt(jsonStr);
     QRShareDialog.show(context, encryptedData);
